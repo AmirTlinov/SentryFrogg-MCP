@@ -1,158 +1,108 @@
 # SentryFrogg MCP Server v4.2.0
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
-[![MCP](https://img.shields.io/badge/MCP-SDK-blue.svg)](https://github.com/modelcontextprotocol/sdk)
+## Document Profile
+| Field | Value |
+| --- | --- |
+| Product | SentryFrogg MCP Server |
+| Version | 4.2.0 |
+| Runtime | Node.js ≥ 16 |
+| Interfaces | Model Context Protocol (PostgreSQL · SSH · HTTP) |
+| License | MIT |
 
-> English version | [Russian version](README_RU.md)
+## Executive Synopsis
+SentryFrogg MCP Server supplies a governed command plane for MCP-compatible agents that operate data platforms, remote shells and web services. The implementation prioritises deterministic behaviour, encrypted credential storage and prescriptive workflows so that autonomous agents can execute infrastructure tasks with enterprise auditability.
 
-## Overview
-SentryFrogg MCP Server provides an auditable bridge between Model Context Protocol (MCP) compatible agents and three controlled execution channels: PostgreSQL, SSH and HTTP. The service delivers deterministic responses, uniform tooling semantics and operational controls tailored for enterprise and research environments.
+## Functional Surface
+| Capability | Detail |
+| --- | --- |
+| PostgreSQL control | Parameterised SQL, catalog discovery, CRUD helpers, mutual TLS, connection profiling. |
+| SSH execution | Serial command dispatch per profile, password/key authentication, reachability diagnostics. |
+| HTTP access | REST verbs with JSON payloads, health checks, programmable headers and bearer tokens. |
+| Secret vault | AES-256 encrypted profiles persisted in `profiles.json` with managed key material. |
+| Telemetry | Tool-level statistics via `getStats()` for integration with monitoring stacks. |
 
-## Release Highlights (4.2.0)
-- TLS for PostgreSQL now supports client certificates, dedicated CA bundles and hostname pinning.
-- Single bootstrap with three scoped managers; dependency injection layers removed for transparency.
-- Persistent AES-256 key management with optional external key override for profile portability.
-- Normalised action payloads across PostgreSQL, SSH and HTTP surfaces to simplify automation.
-- Telemetry hooks (`getStats()`) for service diagnostics and observability integration.
+## System Components
+| Component | Scope |
+| --- | --- |
+| `sentryfrogg_server.cjs` | MCP entry point, tool catalogue, lifecycle supervision. |
+| `src/bootstrap/ServiceBootstrap.cjs` | Service registration, dependency wiring, resource cleanup. |
+| `src/managers/PostgreSQLManager.cjs` | SQL execution, profile validation, TLS configuration, pool management. |
+| `src/managers/SSHManager.cjs` | SSH sessions, sequential execution enforcement, profile hygiene. |
+| `src/managers/APIManager.cjs` | HTTP invocation, header synthesis, response shaping. |
+| `src/services/ProfileService.cjs` | Encrypted persistence and retrieval of profile objects. |
+| `src/services/Security.cjs` | Key lifecycle, cryptographic primitives, payload size guards. |
+| `src/services/Validation.cjs` | Canonical validation for incoming payloads. |
 
-## Architecture
-```
-sentryfrogg_server.cjs      # MCP entry point
-src/
-├── bootstrap/ServiceBootstrap.cjs
-├── managers/
-│   ├── PostgreSQLManager.cjs
-│   ├── SSHManager.cjs
-│   └── APIManager.cjs
-├── services/
-│   ├── Logger.cjs
-│   ├── Security.cjs
-│   ├── Validation.cjs
-│   └── ProfileService.cjs
-├── constants/Constants.cjs
-└── mcp_config.md              # Agent reference sheet
-```
-Each manager offers a tightly scoped interface; shared services provide logging, validation and encrypted profile storage.
-
-## Prerequisites
-- Node.js 16 or later (npm included).
-- Credentials for the target PostgreSQL instances, SSH hosts and HTTP endpoints.
-- Permission to persist encrypted credentials on the system hosting SentryFrogg.
-
-## Installation
-```bash
-git clone https://github.com/yourusername/sentryfrogg-mcp.git
-cd sentryfrogg-mcp
-npm install
-```
-Run a syntax check before attaching the server to an MCP client:
-```bash
-npm run check
-```
-
-## MCP Client Integration
-Claude Desktop example (Windows paths shown for clarity):
-```json
-{
-  "mcpServers": {
-    "sentryfrogg": {
-      "command": "node",
-      "args": ["C:\\path\\to\\sentryfrogg-mcp\\sentryfrogg_server.cjs"],
-      "env": { "NODE_ENV": "production" }
-    }
-  }
-}
-```
-
-## Security and Compliance
-- Secrets stored in `profiles.json` are encrypted with AES-256-CBC. The generated key resides in `.mcp_profiles.key` with `0600` permissions.
-- Define `ENCRYPTION_KEY` to supply a managed key or to re-use profiles across hosts. Rotate keys using your standard key-management workflow.
-- Client TLS assets (`ssl_ca`, `ssl_cert`, `ssl_key`, `ssl_passphrase`) are stored alongside passwords and encrypted by the same key hierarchy.
-- Input validation enforces required fields, command length limits and sequential SSH execution to prevent race conditions.
-- Review handling of `.mcp_profiles.key` before committing or distributing repository snapshots to maintain compliance obligations.
-
-## Manager Interfaces
-
+## MCP Tools
 ### `mcp_psql_manager`
-| Action | Purpose | Minimal payload |
-| --- | --- | --- |
-| `setup_profile` | Persist PostgreSQL credentials or `connection_url` | `{ "action": "setup_profile", "host": "localhost", "username": "postgres", "password": "xxx", "database": "mydb" }` |
-| `list_profiles` | Return stored profiles | `{ "action": "list_profiles" }` |
-| `quick_query` | Execute SQL with optional parameters; enforces automatic limits | `{ "action": "quick_query", "sql": "SELECT * FROM users WHERE id = $1", "params": [1] }` |
-| `show_tables` | List non-system tables | `{ "action": "show_tables" }` |
-| `describe_table` | Provide column metadata | `{ "action": "describe_table", "table_name": "users" }` |
-| `sample_data` | Retrieve representative rows with a limit | `{ "action": "sample_data", "table_name": "users", "limit": 10 }` |
-| `insert_data` | Insert JSON-formatted records | `{ "action": "insert_data", "table_name": "users", "data": { "name": "Ada" } }` |
-| `update_data` | Update rows using a SQL `where` clause | `{ "action": "update_data", "table_name": "users", "data": { "active": true }, "where": "id = 1" }` |
-| `delete_data` | Remove matching rows | `{ "action": "delete_data", "table_name": "users", "where": "id = 1" }` |
-| `database_info` | Return basic database statistics | `{ "action": "database_info" }` |
-
-**TLS options** — add these fields to `setup_profile` when the target requires mutual TLS:
-
-```jsonc
-{
-  "action": "setup_profile",
-  "profile_name": "prod",
-  "connection_url": "postgres://postgres@db.internal:5432/core?sslmode=verify-full",
-  "ssl_ca": "-----BEGIN CERTIFICATE-----...",
-  "ssl_cert": "-----BEGIN CERTIFICATE-----...",
-  "ssl_key": "-----BEGIN PRIVATE KEY-----...",
-  "ssl_passphrase": "optional",
-  "ssl_servername": "db.internal",
-  "ssl_reject_unauthorized": true
-}
-```
-
-Certificates and private keys are encrypted at rest in `profiles.json`. Use `ssl_mode` (`disable`, `require`, `verify-ca`, `verify-full`) to map to PostgreSQL expectations when not provided via `connection_url`.
+| Attribute | Specification |
+| --- | --- |
+| Required flow | `setup_profile` → downstream action using same `profile_name`. |
+| Actions | `setup_profile`, `list_profiles`, `quick_query`, `show_tables`, `describe_table`, `sample_data`, `insert_data`, `update_data`, `delete_data`, `database_info`. |
+| Credentials | Either discrete fields (`host`, `port`, `username`, `password`, `database`) or `connection_url`. |
+| TLS options | `ssl_mode`, `ssl_ca`, `ssl_cert`, `ssl_key`, `ssl_passphrase`, `ssl_servername`, `ssl_reject_unauthorized`; omitted values reuse stored secrets. |
+| Query rules | `quick_query` injects `LIMIT 100` when absent; bind variables supplied via `params` array (`$1`, `$2`, ...). |
+| Response format | JSON with `success`, `rows`, `rowCount`, `fields`, `command`; failures raise MCP internal errors. |
+| Rejection triggers | Missing profile, malformed SQL, payload limits exceeded, invalid TLS configuration. |
 
 ### `mcp_ssh_manager`
-| Action | Purpose | Minimal payload |
-| --- | --- | --- |
-| `setup_profile` | Store SSH host configuration (password or key based) | `{ "action": "setup_profile", "host": "example.com", "username": "root", "password": "xxx" }` |
-| `list_profiles` | List configured SSH profiles | `{ "action": "list_profiles" }` |
-| `execute` | Run shell commands sequentially | `{ "action": "execute", "command": "ls -la" }` |
-| `system_info` | Collect key system facts | `{ "action": "system_info" }` |
-| `check_host` | Perform a lightweight reachability probe | `{ "action": "check_host" }` |
+| Attribute | Specification |
+| --- | --- |
+| Required flow | `setup_profile` (password or PEM `private_key`, optional `passphrase`) → operational action. |
+| Actions | `setup_profile`, `list_profiles`, `execute`, `system_info`, `check_host`. |
+| Execution model | Commands trimmed and length-limited; pipes/redirects permitted; per-profile execution is strictly sequential. |
+| Outputs | JSON containing `success`, `stdout`, `stderr`, `exitCode`, `durationMs`; errors propagate as MCP internal errors. |
+| Security posture | Secrets encrypted at rest; no templating—agents must supply fully qualified commands. |
 
 ### `mcp_api_client`
-| Action | Purpose | Minimal payload |
+| Attribute | Specification |
+| --- | --- |
+| Actions | `get`, `post`, `put`, `delete`, `patch`, `check_api`. |
+| Inputs | `url` (required), `data` (JSON body for mutating verbs), `headers` (string map), `auth_token` (prefixed into `Authorization` unless already set). |
+| Behaviour | Local and private addresses allowed; HTTP status/body returned in structured JSON; transport or parsing failures emit MCP internal errors. |
+
+## Profile Lifecycle
+1. Invoke `setup_profile` to persist credentials and TLS artefacts; secrets encrypt with AES-256 using `.mcp_profiles.key` (`0600` permissions).  
+2. Reference the same `profile_name` for subsequent operations; omitted sensitive fields inherit stored encrypted values.  
+3. Rotate credentials by reissuing `setup_profile`; the latest payload supersedes previous entries.  
+4. Audit existing profiles via `list_profiles`; responses never disclose secrets.  
+5. Retire unused profiles by editing `profiles.json` under change control.
+
+## TLS Configuration Guidance
+- Prefer embedding `sslmode` directives in `connection_url`; explicit payload fields override URL parameters.  
+- Keep `ssl_reject_unauthorized` at `true` unless communicating with trusted self-signed endpoints.  
+- Provide `ssl_servername` whenever certificate CN/SAN mismatches the host.  
+- Supply PEM blocks as single-line strings using `\n` escape sequences; leading/trailing spaces are disallowed.  
+- `ssl_passphrase` must be non-empty if provided; omit otherwise.
+
+## Installation and Operations
+| Task | Command |
+| --- | --- |
+| Clone and install | `git clone https://github.com/yourusername/sentryfrogg-mcp.git && cd sentryfrogg-mcp && npm install` |
+| Syntax check | `npm run check` |
+| Launch (stdio) | `node sentryfrogg_server.cjs` |
+| Update dependencies | `npm install --package-lock-only && npm audit fix --only=prod` (subject to governance) |
+| Reset profile store | Remove `profiles.json` after confirming backups |
+
+## Security & Compliance
+- Encryption key lifecycle: `.mcp_profiles.key` generated on first run; override via `ENCRYPTION_KEY` for coordinated environments.  
+- Secret exposure: MCP responses never include decrypted values; rotation requires explicit `setup_profile`.  
+- Input governance: SQL statements, SSH commands and HTTP payloads are length-limited; oversized inputs are rejected pre-execution.  
+- Audit trail: stderr logging captures timestamped events per tool to support collection by SIEM platforms.  
+- Dependency governance: locked versions of `pg`, `ssh2`, `node-fetch`, `@modelcontextprotocol/sdk`; monitor advisories for patch cadence.
+
+## Troubleshooting Matrix
+| Symptom | Diagnostic Actions | Remediation |
 | --- | --- | --- |
-| `get` / `post` / `put` / `delete` / `patch` | Execute HTTP requests with JSON encoding | `{ "action": "get", "url": "https://api.example.com/users" }` |
-| `check_api` | Perform a health check | `{ "action": "check_api", "url": "https://api.example.com/ping" }` |
+| PostgreSQL TLS failure | Inspect `ssl_mode`, `ssl_servername`, certificate chain, Postgres logs. | Update TLS materials; rerun `setup_profile`. |
+| SSH command hang | Validate command length, ensure non-interactive execution, check remote prompts. | Adjust command or script; rerun `setup_profile` if credentials changed. |
+| HTTP error response | Review returned status/body, verify `headers` and `auth_token`. | Correct payload; retry request. |
+| Missing profile | Execute `list_profiles` to confirm presence; ensure consistent `profile_name`. | Recreate via `setup_profile`. |
 
-Headers belong in the `headers` object; request bodies are supplied via `data` and serialised to JSON.
+## Change History Reference
+Consult [CHANGELOG.md](CHANGELOG.md) for a dated record of functional and operational updates, including TLS support and renaming.
 
-## Typical Workflow
-```jsonc
-// 1. Register a PostgreSQL profile via connection URL
-{ "action": "setup_profile", "connection_url": "postgres://postgres:postgres@localhost:5432/demo" }
-
-// 2. Inspect tables
-{ "action": "show_tables" }
-
-// 3. Review data samples
-{ "action": "sample_data", "table_name": "users", "limit": 5 }
-
-// 4. Register an SSH profile with a private key
-{ "action": "setup_profile", "profile_name": "prod", "host": "myserver.com", "username": "ubuntu", "private_key": "-----BEGIN...", "passphrase": "secret" }
-
-// 5. Validate host reachability
-{ "action": "check_host", "profile_name": "prod" }
-
-// 6. Call an internal API endpoint
-{ "action": "get", "url": "http://localhost:3000/status" }
-```
-
-## Operations
-- `npm run check` validates the entry point.
-- Integration validation occurs through MCP clients by chaining profile configuration and tool execution.
-- Use `getStats()` on each manager to surface utilisation metrics or integrate with telemetry pipelines.
-
-## Support and Contributions
-1. Fork the repository and create a dedicated feature branch.
-2. Implement the required change and include agent-facing usage examples.
-3. Run `npm run check` before submission.
-4. Submit a pull request summarising changes and validation steps.
-
-The project is distributed under the MIT License. Contributions must follow the repository coding and security guidelines.
+## Contribution & Support
+- Submit changes through pull requests accompanied by verification evidence (`npm run check`).  
+- Never commit `.mcp_profiles.key` or environment-specific secrets.  
+- Use maintainer contact information in `package.json` for escalation or integration assistance.
