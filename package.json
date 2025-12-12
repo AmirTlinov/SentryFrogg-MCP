@@ -39,7 +39,7 @@
     "@modelcontextprotocol/sdk": "^1.20.1",
     "node-fetch": "^3.3.2",
     "pg": "^8.11.3",
-    "ssh2": "^1.15.0"
+    "ssh2": "^1.17.0"
   },
   "engines": {
     "node": ">=18.0.0",
