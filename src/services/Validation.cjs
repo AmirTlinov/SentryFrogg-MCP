@@ -11,18 +11,24 @@ class Validation {
     this.logger = logger.child('validation');
   }
 
-  ensureString(value, label) {
-    if (typeof value !== 'string' || value.trim().length === 0) {
+  ensureString(value, label, { trim = true } = {}) {
+    if (typeof value !== 'string') {
       throw new Error(`${label} must be a non-empty string`);
     }
-    return value.trim();
+
+    const normalized = value.trim();
+    if (normalized.length === 0) {
+      throw new Error(`${label} must be a non-empty string`);
+    }
+
+    return trim ? normalized : value;
   }
 
-  ensureOptionalString(value, label) {
+  ensureOptionalString(value, label, options) {
     if (value === undefined || value === null) {
       return undefined;
     }
-    return this.ensureString(value, label);
+    return this.ensureString(value, label, options);
   }
 
   ensurePort(port, fallback) {
@@ -48,16 +54,24 @@ class Validation {
     return numeric;
   }
 
-  ensureTableName(name) {
-    const trimmed = this.ensureString(name, 'Table name');
+  ensureIdentifier(name, label) {
+    const trimmed = this.ensureString(name, label);
     const pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
     if (!pattern.test(trimmed)) {
-      throw new Error('Table name may contain only letters, digits and underscores, starting with letter or underscore');
+      throw new Error(`${label} may contain only letters, digits and underscores, starting with letter or underscore`);
     }
     if (trimmed.length > Constants.LIMITS.MAX_TABLE_NAME_LENGTH) {
-      throw new Error(`Table name must be ${Constants.LIMITS.MAX_TABLE_NAME_LENGTH} characters or less`);
+      throw new Error(`${label} must be ${Constants.LIMITS.MAX_TABLE_NAME_LENGTH} characters or less`);
     }
     return trimmed;
+  }
+
+  ensureTableName(name) {
+    return this.ensureIdentifier(name, 'Table name');
+  }
+
+  ensureSchemaName(name) {
+    return this.ensureIdentifier(name, 'Schema name');
   }
 
   ensureDataObject(data) {
@@ -82,9 +96,9 @@ class Validation {
     };
 
     if (requirePassword) {
-      normalized.password = this.ensureString(profile.password, 'Password');
+      normalized.password = this.ensureString(profile.password, 'Password', { trim: false });
     } else if (profile.password !== undefined) {
-      normalized.password = this.ensureString(profile.password, 'Password');
+      normalized.password = this.ensureString(profile.password, 'Password', { trim: false });
     }
 
     if (requireDatabase) {

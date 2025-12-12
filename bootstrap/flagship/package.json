@@ -1,0 +1,18 @@
+{
+  "name": "flagship-project",
+  "private": true,
+  "devDependencies": {
+    "@eslint/js": "9.37.0",
+    "@redocly/cli": "2.4.0",
+    "@stoplight/spectral-cli": "6.15.0",
+    "clang-format": "1.8.0",
+    "eslint": "9.37.0",
+    "eslint-plugin-sonarjs": "3.0.5",
+    "jscpd": "4.0.5",
+    "prettier": "3.6.2",
+    "redoc": "2.5.1",
+    "stylelint": "16.25.0",
+    "stylelint-config-standard": "39.0.1"
+  },
+  "scripts": {}
+}

@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentryfrogg-postgres
+    environment:
+      POSTGRES_DB: mcp_demo
+      POSTGRES_USER: mcp_user
+      POSTGRES_PASSWORD: mcp_pass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp_user -d mcp_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ssh:
+    build:
+      context: ./ssh
+    container_name: sentryfrogg-ssh
+    ports:
+      - "2222:22"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep sshd"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped

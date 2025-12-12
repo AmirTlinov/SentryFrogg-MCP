@@ -1,0 +1,11 @@
+dist/
+build/
+coverage/
+reports/
+artifacts/
+.cache/
+.venv/
+.pytest_cache/
+.pytest_tmp/
+.clang-format
+.clang-tidy

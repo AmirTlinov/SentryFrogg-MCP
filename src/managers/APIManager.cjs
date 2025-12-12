@@ -16,10 +16,11 @@ async function fetchFn(...args) {
 }
 
 class APIManager {
-  constructor(logger, security, validation) {
+  constructor(logger, security, validation, options = {}) {
     this.logger = logger.child('api');
     this.security = security;
     this.validation = validation;
+    this.fetch = options.fetch ?? fetchFn;
     this.stats = {
       requests: 0,
       errors: 0,
@@ -47,7 +48,7 @@ class APIManager {
     }
   }
 
-  buildHeaders(rawHeaders, authToken, hasBody) {
+  buildHeaders(rawHeaders, authToken, hasBody, contentTypeHint) {
     const headers = this.validation.ensureHeaders(rawHeaders);
     const finalHeaders = {
       'User-Agent': 'mcp-api-client/4.2.0',
@@ -61,24 +62,49 @@ class APIManager {
         : `Bearer ${authToken}`;
     }
 
-    if (hasBody && !finalHeaders['Content-Type'] && !finalHeaders['content-type']) {
-      finalHeaders['Content-Type'] = 'application/json';
+    if (
+      hasBody &&
+      contentTypeHint &&
+      !finalHeaders['Content-Type'] &&
+      !finalHeaders['content-type']
+    ) {
+      finalHeaders['Content-Type'] = contentTypeHint;
     }
 
     return finalHeaders;
   }
 
+  prepareBody(data) {
+    if (data === undefined) {
+      return { body: undefined, contentType: undefined };
+    }
+
+    if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
+      return { body: data, contentType: 'application/octet-stream' };
+    }
+
+    if (typeof data === 'string') {
+      return { body: data, contentType: 'text/plain; charset=utf-8' };
+    }
+
+    if (typeof data === 'object' && data !== null) {
+      return { body: JSON.stringify(data), contentType: 'application/json' };
+    }
+
+    return { body: JSON.stringify(data), contentType: 'application/json' };
+  }
+
   async request(method, url, { data, headers, auth_token }) {
     const parsedUrl = this.security.ensureUrl(url);
-    const body = data !== undefined ? JSON.stringify(data) : undefined;
-    const hasBody = body !== undefined && body.length > 0;
-    const finalHeaders = this.buildHeaders(headers, auth_token, hasBody);
+    const { body, contentType } = this.prepareBody(data);
+    const hasBody = body !== undefined;
+    const finalHeaders = this.buildHeaders(headers, auth_token, hasBody, contentType);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Constants.NETWORK.TIMEOUT_SSH_COMMAND);
 
     try {
-      const response = await fetchFn(parsedUrl.toString(), {
+      const response = await this.fetch(parsedUrl.toString(), {
         method,
         headers: finalHeaders,
         body,

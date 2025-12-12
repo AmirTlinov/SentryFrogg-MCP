@@ -1,0 +1,7 @@
+{
+  "dup_threshold_pct": 3,
+  "cyclomatic_max": 10,
+  "cognitive_max": 15,
+  "p95_budget_ms": 5,
+  "p99_budget_ms": 10
+}

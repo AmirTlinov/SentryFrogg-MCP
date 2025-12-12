@@ -1,0 +1,11 @@
+Makefile.local
+reports
+artifacts
+node_modules
+.venv
+.pytest_cache
+.pytest_tmp
+.benchmarks
+tools
+.mcp_profiles.key
+target

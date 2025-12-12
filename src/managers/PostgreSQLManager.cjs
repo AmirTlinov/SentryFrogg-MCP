@@ -36,15 +36,15 @@ class PostgreSQLManager {
       case 'show_tables':
         return this.showTables(profile_name);
       case 'describe_table':
-        return this.describeTable(profile_name, args.table_name);
+        return this.describeTable(profile_name, args.table_name, args.schema);
       case 'sample_data':
-        return this.sampleData(profile_name, args.table_name, args.limit);
+        return this.sampleData(profile_name, args.table_name, args.limit, args.schema);
       case 'insert_data':
-        return this.insertData(profile_name, args.table_name, args.data);
+        return this.insertData(profile_name, args.table_name, args.data, args.schema);
       case 'update_data':
-        return this.updateData(profile_name, args.table_name, args.data, args.where);
+        return this.updateData(profile_name, args.table_name, args.data, args.where, args.schema);
       case 'delete_data':
-        return this.deleteData(profile_name, args.table_name, args.where);
+        return this.deleteData(profile_name, args.table_name, args.where, args.schema);
       case 'database_info':
         return this.databaseInfo(profile_name);
       default:
@@ -174,6 +174,7 @@ class PostgreSQLManager {
 
     await this.testConnection(finalProfile);
     await this.profileService.setProfile(name, finalProfile);
+    await this.invalidatePool(name);
     this.stats.profiles_created += 1;
 
     return {
@@ -193,6 +194,23 @@ class PostgreSQLManager {
   async listProfiles() {
     const profiles = await this.profileService.listProfiles('postgresql');
     return { success: true, profiles };
+  }
+
+  async invalidatePool(profileName) {
+    const existingPool = this.pools.get(profileName);
+    if (!existingPool) {
+      return;
+    }
+
+    this.pools.delete(profileName);
+    try {
+      await existingPool.end();
+    } catch (error) {
+      this.logger.warn('Failed to close PostgreSQL pool during invalidation', {
+        profile: profileName,
+        error: error.message,
+      });
+    }
   }
 
   buildPoolConfig(profile) {
@@ -437,8 +455,9 @@ class PostgreSQLManager {
     return this.executeQuery(profileName, sql);
   }
 
-  async describeTable(profileName, tableName) {
+  async describeTable(profileName, tableName, schemaName) {
     const name = this.validation.ensureTableName(tableName);
+    const schema = this.validation.ensureSchemaName(schemaName ?? 'public');
     const pool = await this.getPool(profileName);
     const result = await pool.query(
       `SELECT column_name,
@@ -449,65 +468,99 @@ class PostgreSQLManager {
               numeric_precision,
               numeric_scale
        FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = $1
+       WHERE table_schema = $1 AND table_name = $2
        ORDER BY ordinal_position`,
-      [name]
+      [schema, name]
     );
 
     this.stats.queries += 1;
-    return { success: true, table: name, columns: result.rows };
+    return { success: true, table: name, schema, columns: result.rows };
   }
 
-  async sampleData(profileName, tableName, limit) {
-    const name = this.validation.ensureTableName(tableName);
+  buildQualifiedName(tableName, schemaName) {
+    const table = this.validation.ensureTableName(tableName);
+
+    if (schemaName === undefined || schemaName === null) {
+      return { qualified: table, table, schema: undefined };
+    }
+
+    const schema = this.validation.ensureSchemaName(schemaName);
+    return { qualified: `${schema}.${table}`, table, schema };
+  }
+
+  async sampleData(profileName, tableName, limit, schemaName) {
+    const context = this.buildQualifiedName(tableName, schemaName);
     const safeLimit = this.validation.ensureLimit(limit, Constants.LIMITS.SAMPLE_DATA_LIMIT);
     const pool = await this.getPool(profileName);
-    const sql = `SELECT * FROM ${name} LIMIT $1`;
+    const sql = `SELECT * FROM ${context.qualified} LIMIT $1`;
     const result = await pool.query(sql, [safeLimit]);
     this.stats.queries += 1;
-    return { success: true, table: name, sample_size: result.rowCount, rows: result.rows };
+    return {
+      success: true,
+      table: context.table,
+      schema: context.schema,
+      sample_size: result.rowCount,
+      rows: result.rows,
+    };
   }
 
-  async insertData(profileName, tableName, data) {
-    const name = this.validation.ensureTableName(tableName);
+  async insertData(profileName, tableName, data, schemaName) {
+    const context = this.buildQualifiedName(tableName, schemaName);
     const payload = this.validation.ensureDataObject(data);
 
     const columns = Object.keys(payload);
     const values = Object.values(payload);
     const placeholders = columns.map((_, index) => `$${index + 1}`);
-    const sql = `INSERT INTO ${name} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+    const sql = `INSERT INTO ${context.qualified} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
 
     const pool = await this.getPool(profileName);
     const result = await pool.query(sql, values);
     this.stats.queries += 1;
-    return { success: true, table: name, row: result.rows[0], rowCount: result.rowCount };
+    return {
+      success: true,
+      table: context.table,
+      schema: context.schema,
+      row: result.rows[0],
+      rowCount: result.rowCount,
+    };
   }
 
-  async updateData(profileName, tableName, data, where) {
-    const name = this.validation.ensureTableName(tableName);
+  async updateData(profileName, tableName, data, where, schemaName) {
+    const context = this.buildQualifiedName(tableName, schemaName);
     const payload = this.validation.ensureDataObject(data);
     const whereClause = this.validation.ensureWhereClause(where);
 
     const columns = Object.keys(payload);
     const values = Object.values(payload);
     const assignments = columns.map((col, index) => `${col} = $${index + 1}`);
-    const sql = `UPDATE ${name} SET ${assignments.join(', ')} WHERE ${whereClause} RETURNING *`;
+    const sql = `UPDATE ${context.qualified} SET ${assignments.join(', ')} WHERE ${whereClause} RETURNING *`;
 
     const pool = await this.getPool(profileName);
     const result = await pool.query(sql, values);
     this.stats.queries += 1;
-    return { success: true, table: name, rows: result.rows, rowCount: result.rowCount };
+    return {
+      success: true,
+      table: context.table,
+      schema: context.schema,
+      rows: result.rows,
+      rowCount: result.rowCount,
+    };
   }
 
-  async deleteData(profileName, tableName, where) {
-    const name = this.validation.ensureTableName(tableName);
+  async deleteData(profileName, tableName, where, schemaName) {
+    const context = this.buildQualifiedName(tableName, schemaName);
     const whereClause = this.validation.ensureWhereClause(where);
 
-    const sql = `DELETE FROM ${name} WHERE ${whereClause}`;
+    const sql = `DELETE FROM ${context.qualified} WHERE ${whereClause}`;
     const pool = await this.getPool(profileName);
     const result = await pool.query(sql);
     this.stats.queries += 1;
-    return { success: true, table: name, rowCount: result.rowCount };
+    return {
+      success: true,
+      table: context.table,
+      schema: context.schema,
+      rowCount: result.rowCount,
+    };
   }
 
   async databaseInfo(profileName) {

@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-10-13T11:17:54Z",
+  "runtime_commit": "7cc757ff8954ef85cbb140535f9cbaf23c10dc2c",
+  "runtime_commit_short": "7cc757ff",
+  "artifact": "flagship-universal-bootstrap_v7_1.tar.gz",
+  "artifact_sha": "e84fe1f4f058202750a4a79c3c55ff38cda002a61a80777e22a17c1933d8954d",
+  "artifact_sha_paths": [
+    "/home/amir/Документы/PROJECTS/mcp/SentryFrogg/artifacts/flagship-universal-bootstrap_v7_1.tar.gz.sha256",
+    "reports/artifacts/flagship-universal-bootstrap_v7_1.tar.gz.sha256"
+  ],
+  "metrics": {},
+  "cli_version": "0.3.6"
+}

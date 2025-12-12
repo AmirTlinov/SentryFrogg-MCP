@@ -67,8 +67,12 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
+
+# Secret material
 .env
 .env.test
+.mcp_profiles.key
+profiles.json
 
 # parcel-bundler cache
 .cache/

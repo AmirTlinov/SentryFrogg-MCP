@@ -7,8 +7,8 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
 const Constants = require('../constants/Constants.cjs');
+const { resolveProfileKeyPath } = require('../utils/paths.cjs');
 
 const KEY_BYTES = Constants.BUFFERS.CRYPTO_KEY_SIZE;
 const IV_BYTES = Constants.BUFFERS.CRYPTO_IV_SIZE;
@@ -43,7 +43,7 @@ class Security {
   constructor(logger) {
     this.logger = logger.child('security');
     this.algorithm = Constants.CRYPTO.ALGORITHM;
-    this.keyPath = process.env.MCP_PROFILE_KEY_PATH || path.join(process.cwd(), '.mcp_profiles.key');
+    this.keyPath = resolveProfileKeyPath();
     this.secretKey = this.loadOrCreateSecret();
     this.limits = {
       maxDataSize: Constants.LIMITS.MAX_DATA_SIZE,
