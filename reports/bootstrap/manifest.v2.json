@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "files": {
+    "bootstrap/flagship/.clang-format": "55da651c09e391c5bba3e112f607f7d1cf7acfee584b97678b8bf04c30ef441d",
+    "bootstrap/flagship/.clang-tidy": "03db47e161043c4b78e237bbd8c81b8f276faa4efa1490ec610153d9e44a6b98",
+    "bootstrap/flagship/.jscpdignore": "9bf6154b9bb161e1dd29960adde5937b695facc7e00cdfd029be2c667bad6bf5",
+    "bootstrap/flagship/.prettierignore": "d807252e1a01045f2c7814166d512f36acefa008d9b48d07b6ad8d72c9f6e5ca",
+    "bootstrap/flagship/Makefile": "dfa378e9fe1c89d56fbfa355825f67fc6d1f4ece17ac9387ddbb44aedc8c2a30",
+    "bootstrap/flagship/clippy.toml": "45b78cdac444546d03411bf607b776b2627ec5d043a255765d13cbd670a0606c",
+    "bootstrap/flagship/configs/guardrails.json": "97084aaf77913c0040650c70d34a708a87375d77762c024130636289c30f786a",
+    "bootstrap/flagship/eslint.config.mjs": "ec3dbde3037c4f623ea3be234855b69ed64998dde951606a57a085a1d8c18b15",
+    "bootstrap/flagship/package-lock.json": "75827a6faa9ab72cb26ae33c73eaa9ec7b37df3a10616209eb4d845be22ad507",
+    "bootstrap/flagship/package.json": "0a9c467dc38fc882d04bcd16435f34e600c2a756656c3cfbd920484189c7d063",
+    "bootstrap/flagship/scripts/bench/generate_baseline.py": "6862b3b8e733d98db86f67c5975470cb59b1e78e07cedbfc3f9d30bda9c5c1e4",
+    "bootstrap/flagship/scripts/bench/parse_p95_p99.sh": "ba35f74d3cc0d7c8f90b6ffcafa93692af8e62907d93bb337d20a5141684a28d",
+    "bootstrap/flagship/scripts/bootstrap/install_node.sh": "9f87ff90547c5860072b3cf2ae16b488141dce195e152297429ce9be62c99f92",
+    "bootstrap/flagship/scripts/bootstrap/install_syft.sh": "f2cede4def77bb18508d5f159acaa5e2eadbce90f441cee96306517cec8a2ff7",
+    "bootstrap/flagship/scripts/cpp/generate_compile_commands.sh": "65aaaba9bc6bd78582017914d216e1e1beb9fa38493d4a834589ab10e2e67715",
+    "bootstrap/flagship/scripts/quality/complexity.py": "ba20090b282932ddbb449a8b2545aa9c29288da8d20286f5af0414337b6b268d",
+    "bootstrap/flagship/scripts/quality/complexity.sh": "5709f24ec16cf87da04ee10597f020fdb90ad54db722c25d1f0a2b7cb1310226",
+    "bootstrap/flagship/scripts/quality/guard.py": "8e074822770e154ec45dc22b74b829f9a9d9bb512813cc4421e40375b3bc3a21",
+    "bootstrap/flagship/scripts/quality/merge_cyclonedx.py": "f3f54d8f83f1a0cfc30e1cb9a9976ac4b859ed819b1e8de7468ea2cb22a45423",
+    "bootstrap/flagship/scripts/security/aggregate.py": "ce9efdc4f545f3c9f9480081e0a10a7ae1740fe3cf164ee7ceea86249b733cfd",
+    "bootstrap/flagship/scripts/security/patch_pip.py": "5bcd2816397dbacce8c207c5e0d2c057fd7162142b751c37474f4c7fdd3b6c2b",
+    "bootstrap/flagship/stylelint.config.mjs": "301775871d8067584e792010d3954658fe4e7eed81113c4654d9d6f943630c40"
+  }
+}

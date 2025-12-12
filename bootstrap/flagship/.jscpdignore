@@ -1,0 +1,12 @@
+**/node_modules/**
+**/target/**
+**/dist/**
+**/build/**
+**/reports/**
+**/artifacts/**
+**/.venv/**
+**/.pytest_cache/**
+**/.pytest_tmp/**
+**/.benchmarks/**
+**/tools/**
+**/*.lock

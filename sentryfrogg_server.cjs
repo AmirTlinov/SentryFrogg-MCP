@@ -25,6 +25,20 @@ const ServiceBootstrap = require('./src/bootstrap/ServiceBootstrap.cjs');
 
 const toolCatalog = [
   {
+    name: 'help',
+    description: 'Краткая справка по использованию SentryFrogg MCP сервера и доступным инструментам.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tool: {
+          type: 'string',
+          description: 'Название инструмента для детализации. Оставьте пустым для общего описания.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'mcp_psql_manager',
     description: 'PostgreSQL toolchain. Flow: setup_profile → action. setup_profile accepts credentials or connection_url plus optional TLS (ssl_mode, ssl_ca, ssl_cert, ssl_key, ssl_passphrase, ssl_servername, ssl_reject_unauthorized); secrets stored encrypted. Subsequent calls reuse profile_name: quick_query (adds LIMIT 100 if absent; supports params array for $ placeholders), show_tables, describe_table, sample_data, database_info, insert_data, update_data, delete_data, list_profiles.',
     inputSchema: {
@@ -49,7 +63,8 @@ const toolCatalog = [
         sql: { type: 'string' },
         params: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } },
         table_name: { type: 'string' },
-        data: { type: 'object' },
+        schema: { type: 'string', description: 'Optional schema name for table operations' },
+        data: { type: ['object', 'string', 'number', 'boolean'], description: 'Optional request body; objects are JSON-encoded' },
         where: { type: 'string' },
         limit: { type: 'integer' }
       },
@@ -103,8 +118,9 @@ class SentryFroggServer {
       },
       {
         capabilities: {
-          tools: {},
+          tools: { list: true, call: true },
         },
+        protocolVersion: '2025-06-18',
       }
     );
     this.container = null;
@@ -133,6 +149,9 @@ class SentryFroggServer {
       try {
         let result;
         switch (name) {
+          case 'help':
+            result = this.handleHelp(args);
+            break;
           case 'mcp_psql_manager':
             result = await this.handlePostgreSQL(args);
             break;
@@ -180,6 +199,42 @@ class SentryFroggServer {
   async handleAPI(args) {
     this.ensureInitialized();
     return this.container.get('apiManager').handleAction(args);
+  }
+
+  handleHelp(args = {}) {
+    this.ensureInitialized();
+    const tool = args.tool?.toLowerCase();
+    const summaries = {
+      help: {
+        description: 'Показывает справку. Вы можете передать `tool` чтобы получить сведения о конкретном инструменте.',
+        usage: "call_tool → name: 'help', arguments: { tool?: string }",
+      },
+      mcp_psql_manager: {
+        description: 'Управление PostgreSQL: профили, запросы, CRUD, метаданные.',
+        usage: "setup_profile → quick_query/show_tables/describe_table/sample_data/insert/update/delete/database_info",
+      },
+      mcp_ssh_manager: {
+        description: 'Выполнение SSH команд и диагностика хоста по профилю.',
+        usage: "setup_profile → execute/system_info/check_host/list_profiles",
+      },
+      mcp_api_client: {
+        description: 'HTTP клиент с поддержкой токенов, заголовков и JSON-данных.',
+        usage: "action: get/post/put/delete/patch/check_api + url [+ data/headers/auth_token]",
+      },
+    };
+
+    if (tool && summaries[tool]) {
+      return summaries[tool];
+    }
+
+    return {
+      overview: 'SentryFrogg MCP подключает PostgreSQL, SSH и HTTP инструменты. Сначала настройте профиль (setup_profile), затем запускайте операции.',
+      tools: Object.entries(summaries).map(([key, value]) => ({
+        name: key,
+        description: value.description,
+        usage: value.usage,
+      })),
+    };
   }
 
   ensureInitialized() {

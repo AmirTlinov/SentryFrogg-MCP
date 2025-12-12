@@ -34,6 +34,14 @@ SentryFrogg MCP Server supplies a governed command plane for MCP-compatible agen
 | `src/services/Validation.cjs` | Canonical validation for incoming payloads. |
 
 ## MCP Tools
+### `help`
+| Attribute | Specification |
+| --- | --- |
+| Purpose | Provide quick guidance on how to work with SentryFrogg and its tools. |
+| Arguments | Optional `tool` string to focus the response on a single instrument. |
+| Output | Text summary plus structured JSON overview of tools and usage patterns. |
+| Typical flow | `call_tool` → `name: "help"` (with or without `arguments.tool`). |
+
 ### `mcp_psql_manager`
 | Attribute | Specification |
 | --- | --- |
@@ -66,7 +74,8 @@ SentryFrogg MCP Server supplies a governed command plane for MCP-compatible agen
 2. Reference the same `profile_name` for subsequent operations; omitted sensitive fields inherit stored encrypted values.  
 3. Rotate credentials by reissuing `setup_profile`; the latest payload supersedes previous entries.  
 4. Audit existing profiles via `list_profiles`; responses never disclose secrets.  
-5. Retire unused profiles by editing `profiles.json` under change control.
+5. Retire unused profiles by editing `profiles.json` under change control.  
+6. Use `profiles.example.json` as a template when creating new environments; never commit live `profiles.json` or `.mcp_profiles.key`.
 
 ## TLS Configuration Guidance
 - Prefer embedding `sslmode` directives in `connection_url`; explicit payload fields override URL parameters.  
@@ -78,11 +87,11 @@ SentryFrogg MCP Server supplies a governed command plane for MCP-compatible agen
 ## Installation and Operations
 | Task | Command |
 | --- | --- |
-| Clone and install | `git clone https://github.com/yourusername/sentryfrogg-mcp.git && cd sentryfrogg-mcp && npm install` |
+| Clone and install | `git clone https://github.com/iMAGRAY/SentryFrogg-MCP.git && cd SentryFrogg-MCP && npm install` |
 | Syntax check | `npm run check` |
 | Launch (stdio) | `node sentryfrogg_server.cjs` |
 | Update dependencies | `npm install --package-lock-only && npm audit fix --only=prod` (subject to governance) |
-| Reset profile store | Remove `profiles.json` after confirming backups |
+| Reset profile store | Remove `profiles.json` (it is gitignored) after confirming backups |
 
 ## Security & Compliance
 - Encryption key lifecycle: `.mcp_profiles.key` generated on first run; override via `ENCRYPTION_KEY` for coordinated environments.  
@@ -106,3 +115,19 @@ Consult [CHANGELOG.md](CHANGELOG.md) for a dated record of functional and operat
 - Submit changes through pull requests accompanied by verification evidence (`npm run check`).  
 - Never commit `.mcp_profiles.key` or environment-specific secrets.  
 - Use maintainer contact information in `package.json` for escalation or integration assistance.
+
+## Quick Start Checklist
+| Step | Action |
+| --- | --- |
+| 1 | `git remote set-url origin https://github.com/iMAGRAY/SentryFrogg-MCP.git` (align local remote). |
+| 2 | Copy `profiles.example.json` → `profiles.json` and adjust host-specific settings. |
+| 3 | Run `node sentryfrogg_server.cjs` from the project root (or allow MCP host to spawn it). |
+| 4 | In the MCP client, call `setup_profile` for each tool before issuing operational commands. |
+| 5 | Execute `npm run check` prior to commits; extend with integration tests as they are introduced. |
+
+## Testing Roadmap
+- `npm test` выполняет встроенные unit-тесты менеджеров и smoke-тест `STDIO handshake returns initialize response and tools list`, который поднимает сервер через STDIO и проверяет ответы `initialize`/`tools/list`.  
+- Recommended next steps: add unit tests around `PostgreSQLManager`, `SSHManager`, and `APIManager` using a headless test framework (e.g., Jest + test containers for PostgreSQL and SSH).  
+- Introduce linters (`eslint`, `prettier`) and type checks to enforce coding standards.  
+- Establish integration smoke tests that validate TLS handshakes using mock certificates.  
+- Use `integration/docker-compose.yml` to spin up disposable PostgreSQL (`127.0.0.1:5432`, `mcp_user/mcp_pass`) and SSH (`127.0.0.1:2222`, `mcp/mcp_pass`) targets for end-to-end validation; see `integration/README.md`.

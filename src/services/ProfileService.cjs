@@ -6,12 +6,14 @@
 
 const fs = require('fs/promises');
 const path = require('path');
+const { resolveProfileBaseDir } = require('../utils/paths.cjs');
 
 class ProfileService {
   constructor(logger, security) {
     this.logger = logger.child('profiles');
     this.security = security;
-    this.filePath = path.join(process.cwd(), 'profiles.json');
+    this.baseDir = resolveProfileBaseDir();
+    this.filePath = path.join(this.baseDir, 'profiles.json');
     this.profiles = new Map();
     this.secretFields = ['password', 'private_key', 'passphrase', 'token', 'ssl_ca', 'ssl_cert', 'ssl_key', 'ssl_passphrase'];
     this.stats = {
@@ -51,6 +53,7 @@ class ProfileService {
 
   async persist() {
     const data = Object.fromEntries(this.profiles);
+    await fs.mkdir(this.baseDir, { recursive: true });
     await fs.writeFile(this.filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
     this.stats.saved += 1;
   }
@@ -90,9 +93,16 @@ class ProfileService {
     }
 
     const encryptedSecrets = {};
+    const requestedFields = new Set(
+      Object.keys(config).filter((key) => this.secretFields.includes(key))
+    );
     for (const field of this.secretFields) {
-      if (config[field]) {
-        encryptedSecrets[field] = await this.security.encrypt(config[field]);
+      if (Object.prototype.hasOwnProperty.call(config, field)) {
+        const value = config[field];
+        if (value === null || value === '') {
+          continue;
+        }
+        encryptedSecrets[field] = await this.security.encrypt(value);
       } else if (existing.secrets?.[field]) {
         encryptedSecrets[field] = existing.secrets[field];
       } else if (existing[field]) {
@@ -103,6 +113,8 @@ class ProfileService {
 
     if (Object.keys(encryptedSecrets).length > 0) {
       profile.secrets = encryptedSecrets;
+    } else if (requestedFields.size > 0 || profile.secrets) {
+      delete profile.secrets;
     }
 
     this.profiles.set(trimmedName, profile);
