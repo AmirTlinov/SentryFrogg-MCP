@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
 const { createWriteStream } = require('fs');
+const { PassThrough } = require('stream');
 const { Pool } = require('pg');
 const Constants = require('../constants/Constants.cjs');
 const {
@@ -879,20 +880,17 @@ class PostgreSQLManager {
     return { success: true, table: context.table, schema: context.schema, exists: result.row?.exists === true };
   }
 
-  async exportData(args) {
+  async exportToStream(args, stream) {
     const format = String(args.format || 'csv').toLowerCase();
     if (!['csv', 'jsonl'].includes(format)) {
       throw new Error('format must be csv or jsonl');
     }
 
-    const filePath = args.file_path;
-    if (!filePath) {
-      throw new Error('file_path is required');
-    }
-
     const batchSize = this.normalizeLimit(args.batch_size ?? 1000, 'batch_size') ?? 1000;
     const baseOffset = this.normalizeLimit(args.offset ?? 0, 'offset') ?? 0;
     const limit = this.normalizeLimit(args.limit, 'limit');
+    const headerEnabled = args.csv_header !== false;
+    const delimiter = args.csv_delimiter ? String(args.csv_delimiter) : ',';
 
     const context = normalizeTableContext(args.table, args.schema);
     const columnsSql = this.normalizeColumns(args.columns, args.columns_sql);
@@ -906,9 +904,6 @@ class PostgreSQLManager {
     });
 
     const whereSql = where.clause ? ` WHERE ${where.clause}` : '';
-
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    const stream = createWriteStream(filePath, { encoding: 'utf8' });
     const started = Date.now();
 
     const writeLine = (line) => new Promise((resolve, reject) => {
@@ -928,7 +923,7 @@ class PostgreSQLManager {
         return '';
       }
       const raw = String(value);
-      if (raw.includes('"') || raw.includes(',') || raw.includes('\n')) {
+      if (raw.includes('"') || raw.includes(delimiter) || raw.includes('\n')) {
         return `"${raw.replace(/"/g, '""')}"`;
       }
       return raw;
@@ -945,10 +940,10 @@ class PostgreSQLManager {
         const result = await this.executeQuery(pool, sql, where.params, 'rows', args.timeout_ms);
         const rows = result.rows || [];
 
-        if (!headerWritten && format === 'csv') {
+        if (!headerWritten && format === 'csv' && headerEnabled) {
           columns = result.fields?.map((field) => field.name) || (rows[0] ? Object.keys(rows[0]) : []);
           if (columns.length > 0) {
-            await writeLine(`${columns.map(csvEscape).join(',')}\n`);
+            await writeLine(`${columns.map(csvEscape).join(delimiter)}\n`);
           }
           headerWritten = true;
         }
@@ -962,7 +957,7 @@ class PostgreSQLManager {
             await writeLine(`${JSON.stringify(row)}\n`);
           } else {
             const rowColumns = columns || Object.keys(row);
-            await writeLine(`${rowColumns.map((col) => csvEscape(row[col])).join(',')}\n`);
+            await writeLine(`${rowColumns.map((col) => csvEscape(row[col])).join(delimiter)}\n`);
           }
           rowsWritten += 1;
           if (limit !== undefined && rowsWritten >= limit) {
@@ -984,10 +979,35 @@ class PostgreSQLManager {
       success: true,
       table: context.table,
       schema: context.schema,
-      file_path: filePath,
       format,
       rows_written: rowsWritten,
       duration_ms: Date.now() - started,
+    };
+  }
+
+  exportStream(args) {
+    const stream = new PassThrough();
+    const completion = this.exportToStream(args, stream).catch((error) => {
+      stream.destroy(error);
+      throw error;
+    });
+
+    return { stream, completion };
+  }
+
+  async exportData(args) {
+    const filePath = args.file_path;
+    if (!filePath) {
+      throw new Error('file_path is required');
+    }
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const stream = createWriteStream(filePath, { encoding: 'utf8' });
+    const result = await this.exportToStream(args, stream);
+
+    return {
+      ...result,
+      file_path: filePath,
     };
   }
 

@@ -43,6 +43,8 @@ class PipelineManager {
         'sftp_to_http',
         'http_to_postgres',
         'sftp_to_postgres',
+        'postgres_to_sftp',
+        'postgres_to_http',
       ],
     };
   }
@@ -62,6 +64,10 @@ class PipelineManager {
         return this.httpToPostgres(args);
       case 'sftp_to_postgres':
         return this.sftpToPostgres(args);
+      case 'postgres_to_sftp':
+        return this.postgresToSftp(args);
+      case 'postgres_to_http':
+        return this.postgresToHttp(args);
       default:
         throw new Error(`Unknown pipeline flow: ${flow}`);
     }
@@ -127,11 +133,7 @@ class PipelineManager {
     return null;
   }
 
-  async openHttpStream(httpArgs, cacheArgs, trace) {
-    if (!httpArgs || typeof httpArgs !== 'object') {
-      throw new Error('http config is required');
-    }
-
+  async resolveHttpProfile(httpArgs) {
     const profile = await this.apiManager.resolveProfile(httpArgs.profile_name);
     let auth = httpArgs.auth !== undefined ? httpArgs.auth : profile.auth;
     const authProvider = httpArgs.auth_provider !== undefined ? httpArgs.auth_provider : profile.authProvider;
@@ -139,6 +141,36 @@ class PipelineManager {
     if (authProvider) {
       auth = await this.apiManager.resolveAuthProvider(authProvider, profile.name);
     }
+
+    return { profile, auth };
+  }
+
+  buildExportArgs(args) {
+    return {
+      ...args.postgres,
+      format: args.format,
+      batch_size: args.batch_size,
+      limit: args.limit,
+      offset: args.offset,
+      csv_header: args.csv_header,
+      csv_delimiter: args.csv_delimiter,
+      columns: args.columns,
+      columns_sql: args.columns_sql,
+      order_by: args.order_by,
+      order_by_sql: args.order_by_sql,
+      filters: args.filters,
+      where_sql: args.where_sql,
+      where_params: args.where_params,
+      timeout_ms: args.timeout_ms,
+    };
+  }
+
+  async openHttpStream(httpArgs, cacheArgs, trace) {
+    if (!httpArgs || typeof httpArgs !== 'object') {
+      throw new Error('http config is required');
+    }
+
+    const { profile, auth } = await this.resolveHttpProfile(httpArgs);
 
     const config = this.apiManager.buildRequestConfig(httpArgs, profile, auth);
     const cachePolicy = this.normalizeCache(cacheArgs, httpArgs.cache, profile.data.cache);
@@ -261,13 +293,7 @@ class PipelineManager {
     const httpArgs = args.http || {};
     const sftpArgs = args.sftp || {};
 
-    const profile = await this.apiManager.resolveProfile(httpArgs.profile_name);
-    let auth = httpArgs.auth !== undefined ? httpArgs.auth : profile.auth;
-    const authProvider = httpArgs.auth_provider !== undefined ? httpArgs.auth_provider : profile.authProvider;
-
-    if (authProvider) {
-      auth = await this.apiManager.resolveAuthProvider(authProvider, profile.name);
-    }
+    const { profile, auth } = await this.resolveHttpProfile(httpArgs);
 
     const baseConfig = this.apiManager.buildRequestConfig(httpArgs, profile, auth, {
       body: undefined,
@@ -495,6 +521,107 @@ class PipelineManager {
       flow: 'sftp_to_postgres',
       sftp: { remote_path: sftpArgs.remote_path },
       postgres: { inserted: ingest.inserted },
+    };
+  }
+
+  async postgresToSftp(args) {
+    const trace = this.buildTrace(args);
+    const exportArgs = this.buildExportArgs(args);
+    const { stream, completion } = this.postgresqlManager.exportStream(exportArgs);
+
+    await this.auditStage('postgres_export', trace, {
+      table: exportArgs.table,
+      schema: exportArgs.schema,
+      format: exportArgs.format,
+    });
+
+    const uploadPromise = this.uploadStreamToSftp(stream, args.sftp || {});
+
+    try {
+      const [sftpResult, exportResult] = await Promise.all([uploadPromise, completion]);
+      await this.auditStage('sftp_upload', trace, { remote_path: sftpResult.remote_path });
+
+      return {
+        success: true,
+        flow: 'postgres_to_sftp',
+        postgres: {
+          rows_written: exportResult.rows_written,
+          format: exportResult.format,
+          table: exportResult.table,
+          schema: exportResult.schema,
+          duration_ms: exportResult.duration_ms,
+        },
+        sftp: sftpResult,
+      };
+    } catch (error) {
+      stream.destroy(error);
+      await completion.catch(() => null);
+      await this.auditStage('sftp_upload', trace, { remote_path: args.sftp?.remote_path }, error);
+      throw error;
+    }
+  }
+
+  async postgresToHttp(args) {
+    const trace = this.buildTrace(args);
+    const httpArgs = { ...(args.http || {}) };
+    const exportArgs = this.buildExportArgs(args);
+    const format = String(exportArgs.format || 'csv').toLowerCase();
+
+    httpArgs.method = httpArgs.method || 'POST';
+    const headers = this.validation.ensureHeaders(httpArgs.headers);
+    if (!Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+      headers['Content-Type'] = format === 'jsonl' ? 'application/jsonl' : 'text/csv';
+    }
+    httpArgs.headers = headers;
+
+    const { profile, auth } = await this.resolveHttpProfile(httpArgs);
+    const { stream, completion } = this.postgresqlManager.exportStream(exportArgs);
+
+    await this.auditStage('postgres_export', trace, {
+      table: exportArgs.table,
+      schema: exportArgs.schema,
+      format,
+    });
+
+    let fetched;
+    try {
+      fetched = await this.apiManager.fetchWithRetry(httpArgs, profile, auth, {
+        body: stream,
+        duplex: 'half',
+      });
+    } catch (error) {
+      stream.destroy(error);
+      await completion.catch(() => null);
+      await this.auditStage('http_upload', trace, { url: httpArgs.url }, error);
+      throw error;
+    }
+
+    const exportResult = await completion;
+    const response = fetched.response;
+    const headersSnapshot = Object.fromEntries(response.headers.entries());
+    const responseText = await response.text().catch(() => '');
+
+    await this.auditStage('http_upload', trace, { url: fetched.config?.url ?? httpArgs.url, status: response.status });
+
+    return {
+      success: response.ok,
+      flow: 'postgres_to_http',
+      postgres: {
+        rows_written: exportResult.rows_written,
+        format: exportResult.format,
+        table: exportResult.table,
+        schema: exportResult.schema,
+        duration_ms: exportResult.duration_ms,
+      },
+      http: {
+        url: fetched.config?.url ?? httpArgs.url,
+        method: httpArgs.method,
+        status: response.status,
+        headers: headersSnapshot,
+        response: responseText,
+        attempts: fetched.attempts,
+        retries: fetched.retries,
+      },
     };
   }
 

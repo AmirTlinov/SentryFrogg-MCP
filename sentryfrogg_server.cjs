@@ -190,13 +190,23 @@ const toolCatalog = [
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['run', 'describe'] },
-        flow: { type: 'string', enum: ['http_to_sftp', 'sftp_to_http', 'http_to_postgres', 'sftp_to_postgres'] },
+        flow: { type: 'string', enum: ['http_to_sftp', 'sftp_to_http', 'http_to_postgres', 'sftp_to_postgres', 'postgres_to_sftp', 'postgres_to_http'] },
         http: { type: 'object' },
         sftp: { type: 'object' },
         postgres: { type: 'object' },
         format: { type: 'string', enum: ['jsonl', 'csv'] },
         batch_size: { type: 'integer' },
         max_rows: { type: 'integer' },
+        limit: { type: 'integer' },
+        offset: { type: 'integer' },
+        columns: { type: 'array', items: { type: 'string' } },
+        columns_sql: { type: 'string' },
+        order_by: { type: 'array' },
+        order_by_sql: { type: 'string' },
+        filters: { type: 'object' },
+        where_sql: { type: 'string' },
+        where_params: { type: 'array' },
+        timeout_ms: { type: 'integer' },
         csv_header: { type: 'boolean' },
         csv_delimiter: { type: 'string' },
         cache: { type: 'object' },
@@ -366,7 +376,7 @@ class SentryFroggServer {
     this.server = new Server(
       {
         name: 'sentryfrogg',
-        version: '6.1.0',
+        version: '6.2.0',
       },
       {
         capabilities: {
@@ -557,7 +567,7 @@ class SentryFroggServer {
     }
 
     return {
-      version: '6.1.0',
+      version: '6.2.0',
       architecture: 'lightweight-service-layer',
       ...ServiceBootstrap.getStats(),
     };

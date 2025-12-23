@@ -466,6 +466,18 @@ Streaming pipelines between HTTP, SFTP, and PostgreSQL.
 Key actions:
 - `run` / `describe`
 
+Available flows:
+- `http_to_sftp`
+- `sftp_to_http`
+- `http_to_postgres`
+- `sftp_to_postgres`
+- `postgres_to_sftp`
+- `postgres_to_http`
+
+Postgres export options (for `postgres_*` flows): `format`, `batch_size`, `limit`, `offset`,
+`columns`/`columns_sql`, `order_by`/`order_by_sql`, `filters`/`where_sql`/`where_params`,
+`csv_header`, `csv_delimiter`, `timeout_ms`.
+
 HTTP → Postgres example:
 
 ```json
@@ -487,5 +499,30 @@ HTTP → SFTP example:
   "flow": "http_to_sftp",
   "http": { "url": "https://example.com/report.csv" },
   "sftp": { "profile_name": "default", "remote_path": "/tmp/report.csv", "mkdirs": true }
+}
+```
+
+Postgres → SFTP example:
+
+```json
+{
+  "action": "run",
+  "flow": "postgres_to_sftp",
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "csv",
+  "order_by": ["id"],
+  "sftp": { "profile_name": "default", "remote_path": "/tmp/events.csv", "overwrite": true }
+}
+```
+
+Postgres → HTTP example:
+
+```json
+{
+  "action": "run",
+  "flow": "postgres_to_http",
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "jsonl",
+  "http": { "url": "https://example.com/ingest", "method": "POST" }
 }
 ```
