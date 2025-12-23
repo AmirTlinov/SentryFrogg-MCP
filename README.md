@@ -4,21 +4,23 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
-[![CI](https://github.com/AmirTlinov/SentryFrogg-MCP/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/AmirTlinov/SentryFrogg-MCP/actions/workflows/ci.yml)
+[![CI](https://github.com/AmirTlinov/sentryfrogg-mcp/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/AmirTlinov/sentryfrogg-mcp/actions/workflows/ci.yml)
 
-SentryFrogg is a stdio-based Model Context Protocol (MCP) server that offers PostgreSQL, SSH, HTTP, state, runbook, and pipeline tooling with a clean profile system.
+SentryFrogg is a stdio-based Model Context Protocol (MCP) server that gives LLM agents a production-grade toolbox for PostgreSQL, SSH, and HTTP.
+Use it when you want real infrastructure access without glue scripts: profiles, streaming pipelines, and auditability are built in.
 
-## Features
-- PostgreSQL: profiles or inline connections, query/batch/transaction, CRUD + select/count/exists/export
-- SSH: exec/batch, diagnostics, SFTP (list/upload/download)
-- HTTP: profiles, auth providers, retry/backoff, pagination, downloads, cache
-- State + runbooks: session variables, multi-step workflows, DSL
-- Aliases + presets: short names and reusable argument bundles
-- Pipelines: streaming HTTP↔SFTP↔PostgreSQL flows
-- Observability: trace/span metadata + audit log
-- Output shaping + `store_as` for lightweight data pipelines
-- Encrypted profile store (AES-256-GCM) with persistent key
-- Logs to **stderr** (MCP JSON-RPC stays on **stdout**)
+## Why SentryFrogg
+- One profile system across Postgres, SSH, and HTTP.
+- Streaming pipelines between HTTP, SFTP, and Postgres for large payloads.
+- Reliability primitives: retry/backoff, pagination, timeouts.
+- Runbooks + state for multi-step workflows and repeatable ops.
+- Observability with trace/span metadata and audit logs (redacted).
+- Encrypted local profile store (AES-256-GCM).
+
+## Use cases
+- Sync or backfill data between APIs, SFTP drops, and PostgreSQL.
+- Run controlled remote operations via SSH with auditability.
+- Build repeatable incident runbooks for agents and operators.
 
 ## Quick start
 1. Install: `npm install`

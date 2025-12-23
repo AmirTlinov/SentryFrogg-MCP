@@ -2,19 +2,21 @@
 
 [English](README.md) • [Docs](docs/README.md) • [Конфигурация MCP](mcp_config.md) • [Интеграционный стенд](integration/README.md) • [История изменений](CHANGELOG.md)
 
-SentryFrogg — MCP-сервер (stdio) для PostgreSQL, SSH, HTTP, state, runbook и пайплайнов с чистой системой профилей.
+SentryFrogg — MCP-сервер (stdio), который даёт LLM-агентам продакшн-инструментарий для PostgreSQL, SSH и HTTP.
+Подходит, когда нужен доступ к реальной инфраструктуре без glue-скриптов: профили, стриминг и аудит уже есть.
 
-## Возможности
-- PostgreSQL: профили или inline-подключения, запросы/батчи/транзакции, CRUD + select/count/exists/export
-- SSH: exec/batch, диагностика, SFTP (list/upload/download)
-- HTTP: профили, auth providers, retry/backoff, пагинация, download, cache
-- State + runbooks: переменные между вызовами, многошаговые сценарии, DSL
-- Aliases + presets: короткие имена и переиспользуемые наборы аргументов
-- Pipelines: потоковые HTTP↔SFTP↔PostgreSQL сценарии
-- Observability: trace/span метаданные + аудит-лог
-- Output shaping + `store_as` для лёгких пайплайнов данных
-- Профили шифруются (AES-256-GCM) и сохраняются локально
-- Логи пишутся в **stderr** (stdout — под MCP JSON-RPC)
+## Почему SentryFrogg
+- Единая система профилей для Postgres, SSH и HTTP.
+- Потоковые пайплайны между HTTP, SFTP и Postgres для больших объёмов.
+- Надёжность: retry/backoff, пагинация, таймауты.
+- Runbooks + state для многошаговых сценариев и воспроизводимых операций.
+- Наблюдаемость: trace/span метаданные и аудит-лог с редактированием.
+- Профили шифруются (AES-256-GCM) и хранятся локально.
+
+## Сценарии
+- Синхронизация или бэкфилл данных между API, SFTP и PostgreSQL.
+- Контролируемые операции по SSH с аудитом.
+- Повторяемые runbook-цепочки для агентов и инженеров.
 
 Требования: Node.js `>=18`, npm `>=8`.
 
