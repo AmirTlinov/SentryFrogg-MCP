@@ -22,6 +22,32 @@ Use it when you want real infrastructure access without glue scripts: profiles, 
 - Run controlled remote operations via SSH with auditability.
 - Build repeatable incident runbooks for agents and operators.
 
+## Quick examples
+Ingest JSONL into Postgres:
+
+```json
+{
+  "action": "run",
+  "flow": "http_to_postgres",
+  "http": { "url": "https://example.com/events.jsonl" },
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "jsonl",
+  "batch_size": 500
+}
+```
+
+Export Postgres to SFTP:
+
+```json
+{
+  "action": "run",
+  "flow": "postgres_to_sftp",
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "csv",
+  "sftp": { "profile_name": "default", "remote_path": "/tmp/events.csv", "overwrite": true }
+}
+```
+
 ## Quick start
 1. Install: `npm install`
 2. Configure your MCP client (stdio):

@@ -15,6 +15,6 @@ project:
   enabled: true
   number: null
   owner: AmirTlinov
-  repo: SentryFrogg-MCP
+  repo: sentryfrogg-mcp
   type: repository
   workers: 0

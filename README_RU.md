@@ -18,6 +18,32 @@ SentryFrogg — MCP-сервер (stdio), который даёт LLM-агент
 - Контролируемые операции по SSH с аудитом.
 - Повторяемые runbook-цепочки для агентов и инженеров.
 
+## Быстрые примеры
+Загрузка JSONL в Postgres:
+
+```json
+{
+  "action": "run",
+  "flow": "http_to_postgres",
+  "http": { "url": "https://example.com/events.jsonl" },
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "jsonl",
+  "batch_size": 500
+}
+```
+
+Экспорт Postgres в SFTP:
+
+```json
+{
+  "action": "run",
+  "flow": "postgres_to_sftp",
+  "postgres": { "profile_name": "default", "table": "events" },
+  "format": "csv",
+  "sftp": { "profile_name": "default", "remote_path": "/tmp/events.csv", "overwrite": true }
+}
+```
+
 Требования: Node.js `>=18`, npm `>=8`.
 
 ## Быстрый старт
