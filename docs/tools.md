@@ -504,6 +504,11 @@ Profile example:
 
 Notes:
 - `connection.password` / `connection.private_key` / `connection.passphrase` can be SecretRefs (`ref:vault:kv2:*` / `ref:env:*`) and are resolved at execution time.
+- SSH host key verification:
+  - `host_key_policy`: `accept` (default), `tofu` (trust-on-first-use), `pin` (strict match).
+  - `host_key_fingerprint_sha256`: expected fingerprint (`SHA256:<base64>` or `<base64>`). If fingerprint is present and policy is omitted, policy defaults to `pin`.
+  - In `tofu` mode, the first successful connection stores the observed fingerprint into the SSH profile (`host_key_fingerprint_sha256`).
+  - To reset after a legitimate host key rotation, set `connection.host_key_fingerprint_sha256: null` in `profile_upsert` (clears stored fingerprint).
 - Vault profile is selected via `vault_profile_name` / `vault_profile`, or `project target.vault_profile`, or auto-pick when only one vault profile exists.
 - `profile_get` only reveals secret values when `include_secrets: true` **and** `SENTRYFROGG_ALLOW_SECRET_EXPORT=1` (or `SF_ALLOW_SECRET_EXPORT=1`) is set.
 

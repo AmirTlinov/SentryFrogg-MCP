@@ -15,6 +15,49 @@ function profileKey(profileName) {
   return profileName;
 }
 
+function normalizeHostKeyPolicy(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === 'accept') {
+    return 'accept';
+  }
+  if (normalized === 'tofu') {
+    return 'tofu';
+  }
+  if (normalized === 'pin') {
+    return 'pin';
+  }
+  throw new Error(`Unknown host_key_policy: ${normalized}`);
+}
+
+function normalizeFingerprintSha256(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  const withoutPadding = trimmed.replace(/=+$/g, '');
+  if (/^sha256:/i.test(withoutPadding)) {
+    return `SHA256:${withoutPadding.slice(7)}`;
+  }
+  return `SHA256:${withoutPadding}`;
+}
+
+function fingerprintHostKeySha256(key) {
+  if (!Buffer.isBuffer(key)) {
+    throw new Error('SSH host key is not a Buffer');
+  }
+  const hash = crypto.createHash('sha256').update(key).digest('base64');
+  return `SHA256:${hash.replace(/=+$/g, '')}`;
+}
+
 function escapeShellValue(value) {
   const str = String(value);
   return `'${str.replace(/'/g, "'\\''")}'`;
@@ -72,6 +115,7 @@ class SSHManager {
     this.projectResolver = projectResolver;
     this.secretRefResolver = secretRefResolver;
     this.connections = new Map();
+    this.connecting = new Map();
     this.stats = {
       commands: 0,
       profiles_created: 0,
@@ -249,6 +293,36 @@ class SSHManager {
 
     const config = this.buildConnectConfig(resolvedConnection);
 
+    const policyInput = normalizeHostKeyPolicy(args.host_key_policy ?? resolvedConnection.host_key_policy);
+    const expectedFingerprint = normalizeFingerprintSha256(
+      args.host_key_fingerprint_sha256 ?? resolvedConnection.host_key_fingerprint_sha256
+    );
+
+    const policy = policyInput || (expectedFingerprint ? 'pin' : 'accept');
+    if (policy === 'pin' && !expectedFingerprint) {
+      throw new Error('host_key_fingerprint_sha256 is required for host_key_policy=pin');
+    }
+
+    if (policy !== 'accept') {
+      const state = {
+        policy,
+        expected_fingerprint_sha256: expectedFingerprint,
+        observed_fingerprint_sha256: null,
+        tofu_persist: policy === 'tofu' && !expectedFingerprint,
+      };
+
+      config.hostVerifier = (key) => {
+        const observed = fingerprintHostKeySha256(key);
+        state.observed_fingerprint_sha256 = observed;
+        if (expectedFingerprint && observed !== expectedFingerprint) {
+          return false;
+        }
+        return true;
+      };
+
+      config.__sentryfrogg_host_key_state = state;
+    }
+
     const privateKey = await this.loadPrivateKey(resolvedConnection);
     if (privateKey) {
       config.privateKey = privateKey;
@@ -262,6 +336,36 @@ class SSHManager {
     }
 
     return config;
+  }
+
+  async maybePersistTofuHostKey(profileName, hostKeyState) {
+    if (!profileName || typeof profileName !== 'string') {
+      return false;
+    }
+    if (!this.profileService) {
+      return false;
+    }
+    if (!hostKeyState || typeof hostKeyState !== 'object') {
+      return false;
+    }
+    if (hostKeyState.policy !== 'tofu' || hostKeyState.tofu_persist !== true) {
+      return false;
+    }
+
+    const fingerprint = hostKeyState.observed_fingerprint_sha256;
+    if (!fingerprint || typeof fingerprint !== 'string') {
+      return false;
+    }
+
+    await this.profileService.setProfile(profileName, {
+      type: 'ssh',
+      data: {
+        host_key_policy: 'tofu',
+        host_key_fingerprint_sha256: fingerprint,
+      },
+    });
+
+    return true;
   }
 
   async profileUpsert(profileName, params) {
@@ -382,9 +486,20 @@ class SSHManager {
 
     let entry = this.connections.get(key);
     if (!entry || entry.closed) {
-      const connection = this.mergeProfile(profile);
-      entry = await this.createClient(await this.materializeConnection(connection, args), key);
-      this.connections.set(key, entry);
+      let pending = this.connecting.get(key);
+      if (!pending) {
+        const connection = this.mergeProfile(profile);
+        pending = (async () => {
+          const created = await this.createClient(await this.materializeConnection(connection, args), key);
+          this.connections.set(key, created);
+          return created;
+        })();
+        this.connecting.set(key, pending);
+        pending.finally(() => {
+          this.connecting.delete(key);
+        });
+      }
+      entry = await pending;
     }
 
     while (entry.busy) {
@@ -434,16 +549,14 @@ class SSHManager {
         }
       }, connectConfig.readyTimeout ?? Constants.NETWORK.TIMEOUT_SSH_READY);
 
-      const finalize = (fn) => (value) => {
-        if (!resolved) {
+      client
+        .on('ready', () => {
+          if (resolved) {
+            return;
+          }
           resolved = true;
           clearTimeout(timeout);
-          fn(value);
-        }
-      };
 
-      client
-        .on('ready', finalize(() => {
           client.on('close', () => {
             const entry = this.connections.get(key);
             if (entry) {
@@ -451,12 +564,31 @@ class SSHManager {
               this.connections.delete(key);
             }
           });
-          resolve({ client, busy: null, closed: false });
-        }))
-        .on('error', finalize((error) => {
+
+          const hostKeyState = connectConfig.__sentryfrogg_host_key_state;
+          const profileName = typeof key === 'string' ? key : null;
+
+          (async () => {
+            if (profileName) {
+              await this.maybePersistTofuHostKey(profileName, hostKeyState).catch((error) => {
+                this.logger.warn('Failed to persist TOFU host key fingerprint', { profile: profileName, error: error.message });
+              });
+            }
+            resolve({ client, busy: null, closed: false });
+          })().catch((error) => {
+            client.destroy();
+            reject(error);
+          });
+        })
+        .on('error', (error) => {
+          if (resolved) {
+            return;
+          }
+          resolved = true;
+          clearTimeout(timeout);
           client.destroy();
           reject(error);
-        }));
+        });
 
       client.connect(connectConfig);
     });

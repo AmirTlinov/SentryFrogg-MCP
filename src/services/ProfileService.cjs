@@ -126,6 +126,10 @@ class ProfileService {
         if (value === undefined) {
           continue;
         }
+        if (value === null) {
+          delete profile.data[key];
+          continue;
+        }
         profile.data[key] = value;
       }
     }

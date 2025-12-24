@@ -400,10 +400,12 @@ const toolCatalog = [
 	        target: { type: 'string' },
 	        vault_profile_name: { type: 'string' },
 	        vault_profile: { type: 'string' },
+	        host_key_policy: { type: 'string', enum: ['accept', 'tofu', 'pin'] },
+	        host_key_fingerprint_sha256: { type: 'string' },
 	        public_key: { type: 'string' },
 	        public_key_path: { type: 'string' },
 	        authorized_keys_path: { type: 'string' },
-        command: { type: 'string' },
+	        command: { type: 'string' },
         cwd: { type: 'string' },
         env: { type: 'object' },
         stdin: { type: 'string' },
@@ -705,13 +707,13 @@ class SentryFroggServer {
       }
 
       if (toolName === 'mcp_ssh_manager') {
-        switch (actionName) {
-          case 'profile_upsert':
-            return {
-              action: 'profile_upsert',
-              profile_name: 'my-ssh',
-              connection: { host: 'example.com', port: 22, username: 'root', private_key_path: '~/.ssh/id_ed25519' },
-            };
+	        switch (actionName) {
+	          case 'profile_upsert':
+	            return {
+	              action: 'profile_upsert',
+	              profile_name: 'my-ssh',
+	              connection: { host: 'example.com', port: 22, username: 'root', private_key_path: '~/.ssh/id_ed25519', host_key_policy: 'tofu' },
+	            };
           case 'authorized_keys_add':
             return {
               action: 'authorized_keys_add',
