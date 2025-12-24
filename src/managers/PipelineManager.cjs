@@ -103,6 +103,16 @@ class PipelineManager {
       }
     }
 
+    if (merged.vault_profile_name === undefined && merged.vault_profile === undefined) {
+      const rootVaultProfileName = rootArgs?.vault_profile_name;
+      const rootVaultProfile = rootArgs?.vault_profile;
+      if (rootVaultProfileName !== undefined) {
+        merged.vault_profile_name = rootVaultProfileName;
+      } else if (rootVaultProfile !== undefined) {
+        merged.vault_profile = rootVaultProfile;
+      }
+    }
+
     return merged;
   }
 

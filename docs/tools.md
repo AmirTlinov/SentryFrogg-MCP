@@ -78,6 +78,7 @@ Minimal flow example:
 Notes:
 - When a project is active, `project` is optional (tools will pick it up from state).
 - When a target is resolvable, `profile_name` can often be omitted (it is inferred from `project target.*_profile`).
+- If you use `ref:vault:kv2:*` secrets, select Vault via `vault_profile_name` / `vault_profile` or configure `project target.vault_profile`.
 
 ## `help`
 
@@ -249,6 +250,7 @@ Using Vault KV v2 in env profiles (resolved on `write_remote` / `run_remote`):
 Notes:
 - `ref:vault:kv2:<mount>/<path>#<key>` reads from Vault KV v2 (`/v1/<mount>/data/<path>`).
 - Vault profile is selected via `vault_profile_name` / `vault_profile`, or `project target.vault_profile`, or auto-pick when only one vault profile exists.
+- SecretRefs work across `mcp_env`, `mcp_ssh_manager`, `mcp_psql_manager`, and `mcp_api_client` (wherever secret fields are used).
 - `profile_get` only reveals secret values when `include_secrets: true` **and** `SENTRYFROGG_ALLOW_SECRET_EXPORT=1` (or `SF_ALLOW_SECRET_EXPORT=1`) is set.
 
 ## `mcp_runbook`
@@ -440,6 +442,9 @@ Bulk insert example:
 
 Notes:
 - `update`/`delete` without `filters` or `where_sql` will affect **all** rows in the table.
+- `connection.password` and SSL secret fields can be SecretRefs (`ref:vault:kv2:*` / `ref:env:*`) and are resolved at execution time.
+- Vault profile is selected via `vault_profile_name` / `vault_profile`, or `project target.vault_profile`, or auto-pick when only one vault profile exists.
+- `profile_get` only reveals secret values when `include_secrets: true` **and** `SENTRYFROGG_ALLOW_SECRET_EXPORT=1` (or `SF_ALLOW_SECRET_EXPORT=1`) is set.
 
 Select example:
 
@@ -496,6 +501,11 @@ Profile example:
   }
 }
 ```
+
+Notes:
+- `connection.password` / `connection.private_key` / `connection.passphrase` can be SecretRefs (`ref:vault:kv2:*` / `ref:env:*`) and are resolved at execution time.
+- Vault profile is selected via `vault_profile_name` / `vault_profile`, or `project target.vault_profile`, or auto-pick when only one vault profile exists.
+- `profile_get` only reveals secret values when `include_secrets: true` **and** `SENTRYFROGG_ALLOW_SECRET_EXPORT=1` (or `SF_ALLOW_SECRET_EXPORT=1`) is set.
 
 Project-aware example (uses `project target.ssh_profile` or active project):
 
@@ -582,6 +592,11 @@ Profile example:
   "auth": { "type": "bearer", "token": "<token>" }
 }
 ```
+
+Notes:
+- `auth` and `auth_provider` secret fields can be SecretRefs (`ref:vault:kv2:*` / `ref:env:*`) and are resolved at execution time.
+- Vault profile is selected via `vault_profile_name` / `vault_profile`, or `project target.vault_profile`, or auto-pick when only one vault profile exists.
+- `profile_get` only reveals secret values when `include_secrets: true` **and** `SENTRYFROGG_ALLOW_SECRET_EXPORT=1` (or `SF_ALLOW_SECRET_EXPORT=1`) is set.
 
 Project-aware example (uses `project target.api_profile` or active project):
 
@@ -709,6 +724,7 @@ Available flows:
 Project-aware note:
 - If `project`/`target` (or active project + `target`) is provided, the pipeline will default `http.profile_name`, `postgres.profile_name`, and `sftp.profile_name`
   from the configured project target bindings when those fields are missing.
+- `vault_profile_name` / `vault_profile` at pipeline root is propagated into `http`/`postgres`/`sftp` configs (so SecretRefs resolve without repeating it).
 
 Postgres export options (for `postgres_*` flows): `format`, `batch_size`, `limit`, `offset`,
 `columns`/`columns_sql`, `order_by`/`order_by_sql`, `filters`/`where_sql`/`where_params`,
