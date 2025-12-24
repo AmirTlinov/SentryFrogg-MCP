@@ -73,6 +73,7 @@ typings/
 .env.test
 .mcp_profiles.key
 profiles.json
+projects.json
 state.json
 runbooks.json
 aliases.json

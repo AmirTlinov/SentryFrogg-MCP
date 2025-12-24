@@ -35,10 +35,15 @@ SentryFrogg is a stdio-based MCP server built around a small service layer that 
 
 ## Profiles, storage, and encryption
 
-Local state:
+Local state (base directory):
+- Default: `${XDG_STATE_HOME}/sentryfrogg` or `~/.local/state/sentryfrogg`.
+- Compatibility: if legacy store files exist next to the entry file, that directory is used.
+
+Store files:
 - `profiles.json` — profile store (data + encrypted secrets)
 - `.mcp_profiles.key` — persistent encryption key (created with `0600`)
 - `state.json` — persistent state values (session state remains in memory)
+- `projects.json` — project registry (targets → profile bindings)
 - `runbooks.json` — runbook definitions
 - `aliases.json` — alias registry
 - `presets.json` — preset registry
@@ -67,6 +72,7 @@ Environment variables:
 - `MCP_PROFILES_DIR` — directory for `profiles.json`
 - `MCP_PROFILE_KEY_PATH` — explicit path to `.mcp_profiles.key`
 - `MCP_STATE_PATH` — explicit path to `state.json`
+- `MCP_PROJECTS_PATH` — explicit path to `projects.json`
 - `MCP_RUNBOOKS_PATH` — explicit path to `runbooks.json`
 - `MCP_ALIASES_PATH` — explicit path to `aliases.json`
 - `MCP_PRESETS_PATH` — explicit path to `presets.json`

@@ -25,10 +25,18 @@ Notes:
 
 ## Where profiles and keys are stored
 
-By default, SentryFrogg stores local state next to the entry file:
+By default, SentryFrogg stores local state in an OS-friendly location:
+- `${XDG_STATE_HOME}/sentryfrogg` when `XDG_STATE_HOME` is set, otherwise
+- `~/.local/state/sentryfrogg` (HOME fallback).
+
+Compatibility note:
+- If legacy store files already exist next to the entry file, SentryFrogg will keep using that directory (no implicit migration).
+
+Store files:
 - `profiles.json` (encrypted profile store)
 - `.mcp_profiles.key` (persistent encryption key, created with `0600` permissions)
 - `state.json` (persistent state store)
+- `projects.json` (project registry)
 - `runbooks.json` (runbook definitions)
 - `aliases.json` (alias registry)
 - `presets.json` (preset registry)
@@ -39,6 +47,7 @@ Recommended environment variables:
 - `MCP_PROFILES_DIR`: directory for `profiles.json` (keep it **outside** the repository)
 - `MCP_PROFILE_KEY_PATH`: explicit path to `.mcp_profiles.key`
 - `MCP_STATE_PATH`: explicit path to `state.json`
+- `MCP_PROJECTS_PATH`: explicit path to `projects.json`
 - `MCP_RUNBOOKS_PATH`: explicit path to `runbooks.json`
 - `MCP_ALIASES_PATH`: explicit path to `aliases.json`
 - `MCP_PRESETS_PATH`: explicit path to `presets.json`
