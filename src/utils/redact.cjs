@@ -7,6 +7,7 @@ const SENSITIVE_KEYS = [
   'password',
   'passphrase',
   'private_key',
+  'public_key',
   'secret',
   'token',
   'api_key',

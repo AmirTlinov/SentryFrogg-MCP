@@ -71,6 +71,7 @@ typings/
 # Secret material
 .env
 .env.test
+.last
 .mcp_profiles.key
 profiles.json
 projects.json

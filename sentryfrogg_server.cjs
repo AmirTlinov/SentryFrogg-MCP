@@ -355,12 +355,15 @@ const toolCatalog = [
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['profile_upsert', 'profile_get', 'profile_list', 'profile_delete', 'profile_test', 'exec', 'batch', 'system_info', 'check_host', 'sftp_list', 'sftp_upload', 'sftp_download'] },
+        action: { type: 'string', enum: ['profile_upsert', 'profile_get', 'profile_list', 'profile_delete', 'profile_test', 'authorized_keys_add', 'exec', 'batch', 'system_info', 'check_host', 'sftp_list', 'sftp_upload', 'sftp_download'] },
         profile_name: { type: 'string' },
         include_secrets: { type: 'boolean' },
         connection: { type: 'object' },
         project: { type: 'string' },
         target: { type: 'string' },
+        public_key: { type: 'string' },
+        public_key_path: { type: 'string' },
+        authorized_keys_path: { type: 'string' },
         command: { type: 'string' },
         cwd: { type: 'string' },
         env: { type: 'object' },

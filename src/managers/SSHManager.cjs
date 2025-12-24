@@ -4,6 +4,7 @@
  * 🔐 SSH manager.
  */
 
+const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
 const { Client } = require('ssh2');
@@ -16,6 +17,49 @@ function profileKey(profileName) {
 function escapeShellValue(value) {
   const str = String(value);
   return `'${str.replace(/'/g, "'\\''")}'`;
+}
+
+function normalizePublicKeyLine(raw) {
+  const normalized = String(raw ?? '').replace(/\r/g, '');
+  const lines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new Error('public_key must contain a single key line');
+  }
+
+  if (lines.length > 1) {
+    throw new Error('public_key must be a single key line');
+  }
+
+  const line = lines[0];
+  if (line.includes('\0')) {
+    throw new Error('public_key must not contain null bytes');
+  }
+
+  const tokens = line.split(/\s+/);
+  if (tokens.length < 2) {
+    throw new Error('public_key has invalid format (expected: "<type> <base64> [comment]")');
+  }
+
+  return line;
+}
+
+function parsePublicKeyTokens(line) {
+  const tokens = String(line || '').trim().split(/\s+/);
+  if (tokens.length < 2) {
+    throw new Error('public_key has invalid format (expected: "<type> <base64> [comment]")');
+  }
+  return { keyType: tokens[0], keyBlob: tokens[1] };
+}
+
+function fingerprintPublicKeySha256(line) {
+  const { keyBlob } = parsePublicKeyTokens(line);
+  const bytes = Buffer.from(keyBlob, 'base64');
+  const hash = crypto.createHash('sha256').update(bytes.length ? bytes : Buffer.from(keyBlob)).digest('base64');
+  return `SHA256:${hash.replace(/=+$/, '')}`;
 }
 
 class SSHManager {
@@ -48,6 +92,8 @@ class SSHManager {
         return this.profileDelete(args.profile_name);
       case 'profile_test':
         return this.profileTest(args);
+      case 'authorized_keys_add':
+        return this.authorizedKeysAdd(args);
       case 'exec':
         return this.execCommand(args);
       case 'batch':
@@ -65,6 +111,78 @@ class SSHManager {
       default:
         throw new Error(`Unknown SSH action: ${action}`);
     }
+  }
+
+  async resolvePublicKeyLine(args) {
+    if (args.public_key !== undefined) {
+      return normalizePublicKeyLine(this.validation.ensureString(args.public_key, 'public_key', { trim: false }));
+    }
+
+    if (args.public_key_path !== undefined) {
+      const publicKeyPath = this.validation.ensureString(args.public_key_path, 'public_key_path', { trim: false });
+      const raw = await fs.readFile(publicKeyPath, 'utf8');
+      return normalizePublicKeyLine(raw);
+    }
+
+    throw new Error('public_key or public_key_path is required');
+  }
+
+  async authorizedKeysAdd(args = {}) {
+    const publicKeyLine = await this.resolvePublicKeyLine(args);
+    const { keyType, keyBlob } = parsePublicKeyTokens(publicKeyLine);
+    const fingerprint = fingerprintPublicKeySha256(publicKeyLine);
+
+    const authorizedKeysPath = args.authorized_keys_path !== undefined
+      ? this.validation.ensureString(args.authorized_keys_path, 'authorized_keys_path', { trim: false })
+      : undefined;
+
+    const script = [
+      'set -eu',
+      'umask 077',
+      'auth_path="${AUTH_KEYS_PATH:-"$HOME/.ssh/authorized_keys"}"',
+      'ssh_dir="${auth_path%/*}"',
+      'mkdir -p "$ssh_dir"',
+      'chmod 700 "$ssh_dir" 2>/dev/null || true',
+      '[ -f "$auth_path" ] || : > "$auth_path"',
+      'chmod 600 "$auth_path" 2>/dev/null || true',
+      'IFS= read -r key_line',
+      'key_line="$(printf %s "$key_line" | tr -d \'\\r\')"',
+      'set -- $key_line',
+      'key_type="${1:-}"',
+      'key_blob="${2:-}"',
+      '[ -n "$key_type" ] && [ -n "$key_blob" ] || { echo "invalid_key" >&2; exit 2; }',
+      'if awk -v t="$key_type" -v b="$key_blob" \'$0 ~ /^[[:space:]]*#/ { next } { for (i = 1; i <= NF; i++) if ($i == t && (i + 1) <= NF && $(i+1) == b) { found = 1; exit } } END { exit found ? 0 : 1 }\' "$auth_path"; then',
+      '  echo present',
+      'else',
+      '  printf "%s\\n" "$key_line" >> "$auth_path"',
+      '  echo added',
+      'fi',
+    ].join('\n');
+
+    const env = authorizedKeysPath
+      ? { ...(args.env || {}), AUTH_KEYS_PATH: authorizedKeysPath }
+      : args.env;
+
+    const result = await this.execCommand({
+      ...args,
+      command: script,
+      env,
+      stdin: `${publicKeyLine}\n`,
+      pty: false,
+    });
+
+    const marker = String(result.stdout || '').trim().split('\n').pop();
+    if (result.exitCode !== 0) {
+      throw new Error(`authorized_keys_add failed: ${result.stderr || marker || 'unknown error'}`);
+    }
+
+    return {
+      success: marker === 'added' || marker === 'present',
+      changed: marker === 'added',
+      key_type: keyType,
+      key_fingerprint_sha256: fingerprint,
+      authorized_keys_path: authorizedKeysPath || '~/.ssh/authorized_keys',
+    };
   }
 
   async loadPrivateKey(connection) {

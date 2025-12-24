@@ -387,6 +387,7 @@ SSH executor with profiles, single exec, batch runs, and diagnostics.
 
 Key actions:
 - `profile_upsert` / `profile_get` / `profile_list` / `profile_delete` / `profile_test`
+- `authorized_keys_add`
 - `exec` / `batch` / `system_info` / `check_host`
 - `sftp_list` / `sftp_upload` / `sftp_download`
 
@@ -409,6 +410,32 @@ Project-aware example (uses `project target.ssh_profile` or active project):
 
 ```json
 { "action": "exec", "target": "prod", "command": "uname -a" }
+```
+
+Bootstrap: add local `.pub` to remote `authorized_keys` (idempotent):
+
+```json
+{
+  "action": "authorized_keys_add",
+  "profile_name": "default",
+  "public_key_path": "/home/user/.ssh/id_ed25519.pub"
+}
+```
+
+Then switch to key-based auth (private key stays on your machine):
+
+```json
+{
+  "action": "profile_upsert",
+  "profile_name": "default-key",
+  "connection": {
+    "host": "127.0.0.1",
+    "port": 22,
+    "username": "mcp",
+    "private_key_path": "/home/user/.ssh/id_ed25519",
+    "passphrase": "<optional>"
+  }
+}
 ```
 
 Exec example:
