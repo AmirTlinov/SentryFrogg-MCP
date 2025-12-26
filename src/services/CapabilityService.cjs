@@ -81,6 +81,8 @@ class CapabilityService {
       runbook: capability.runbook,
       effects: capability.effects,
       depends_on: capability.depends_on || [],
+      tags: capability.tags || [],
+      when: capability.when,
     }));
   }
 

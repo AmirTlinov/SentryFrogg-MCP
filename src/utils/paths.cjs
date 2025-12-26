@@ -37,6 +37,7 @@ function hasLegacyStore(dirPath) {
     'state.json',
     'projects.json',
     'runbooks.json',
+    'context.json',
     'aliases.json',
     'presets.json',
     'audit.jsonl',
@@ -101,6 +102,12 @@ module.exports = {
       return path.resolve(process.env.MCP_CAPABILITIES_PATH);
     }
     return path.join(resolveProfileBaseDir(), 'capabilities.json');
+  },
+  resolveContextPath() {
+    if (process.env.MCP_CONTEXT_PATH) {
+      return path.resolve(process.env.MCP_CONTEXT_PATH);
+    }
+    return path.join(resolveProfileBaseDir(), 'context.json');
   },
   resolveEvidenceDir() {
     if (process.env.MCP_EVIDENCE_DIR) {

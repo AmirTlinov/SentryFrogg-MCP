@@ -95,6 +95,10 @@ class ServiceBootstrap {
         const runbookService = this.container.get('runbookService');
         await runbookService.initialize();
       }
+      if (this.container.has('contextService')) {
+        const contextService = this.container.get('contextService');
+        await contextService.initialize();
+      }
       if (this.container.has('capabilityService')) {
         const capabilityService = this.container.get('capabilityService');
         await capabilityService.initialize();
@@ -160,6 +164,7 @@ class ServiceBootstrap {
     const ProjectService = require('../services/ProjectService.cjs');
     const ProjectResolver = require('../services/ProjectResolver.cjs');
     const RunbookService = require('../services/RunbookService.cjs');
+    const ContextService = require('../services/ContextService.cjs');
     const CapabilityService = require('../services/CapabilityService.cjs');
     const EvidenceService = require('../services/EvidenceService.cjs');
     const AliasService = require('../services/AliasService.cjs');
@@ -234,6 +239,13 @@ class ServiceBootstrap {
       dependencies: ['logger'],
     });
 
+    // Context сервис
+    this.container.register('contextService', (logger, projectResolver) =>
+      new ContextService(logger, projectResolver), {
+      singleton: true,
+      dependencies: ['logger', 'projectResolver'],
+    });
+
     // Capability сервис
     this.container.register('capabilityService', (logger, security) =>
       new CapabilityService(logger, security), {
@@ -287,6 +299,7 @@ class ServiceBootstrap {
     const EnvManager = require('../managers/EnvManager.cjs');
     const VaultManager = require('../managers/VaultManager.cjs');
     const RunbookManager = require('../managers/RunbookManager.cjs');
+    const ContextManager = require('../managers/ContextManager.cjs');
     const CapabilityManager = require('../managers/CapabilityManager.cjs');
     const IntentManager = require('../managers/IntentManager.cjs');
     const EvidenceManager = require('../managers/EvidenceManager.cjs');
@@ -362,12 +375,20 @@ class ServiceBootstrap {
       dependencies: ['logger', 'validation', 'profileService', 'vaultClient'],
     });
 
+    // Context Manager
+    this.container.register('contextManager',
+      (logger, validation, contextService) =>
+        new ContextManager(logger, validation, contextService), {
+      singleton: true,
+      dependencies: ['logger', 'validation', 'contextService'],
+    });
+
     // Capability Manager
     this.container.register('capabilityManager',
-      (logger, security, validation, capabilityService) =>
-        new CapabilityManager(logger, security, validation, capabilityService), {
+      (logger, security, validation, capabilityService, contextService) =>
+        new CapabilityManager(logger, security, validation, capabilityService, contextService), {
       singleton: true,
-      dependencies: ['logger', 'security', 'validation', 'capabilityService'],
+      dependencies: ['logger', 'security', 'validation', 'capabilityService', 'contextService'],
     });
 
     // Evidence Manager
@@ -380,7 +401,7 @@ class ServiceBootstrap {
 
     // Tool executor
     this.container.register('toolExecutor',
-      (logger, stateService, aliasService, presetService, auditService, postgresqlManager, sshManager, apiManager, stateManager, projectManager, envManager, vaultManager, capabilityManager, evidenceManager, aliasManager, presetManager, auditManager, pipelineManager) =>
+      (logger, stateService, aliasService, presetService, auditService, postgresqlManager, sshManager, apiManager, stateManager, projectManager, envManager, vaultManager, contextManager, capabilityManager, evidenceManager, aliasManager, presetManager, auditManager, pipelineManager) =>
         new ToolExecutor(logger, stateService, aliasService, presetService, auditService, {
           mcp_psql_manager: (args) => postgresqlManager.handleAction(args),
           mcp_ssh_manager: (args) => sshManager.handleAction(args),
@@ -389,6 +410,7 @@ class ServiceBootstrap {
           mcp_project: (args) => projectManager.handleAction(args),
           mcp_env: (args) => envManager.handleAction(args),
           mcp_vault: (args) => vaultManager.handleAction(args),
+          mcp_context: (args) => contextManager.handleAction(args),
           mcp_capability: (args) => capabilityManager.handleAction(args),
           mcp_evidence: (args) => evidenceManager.handleAction(args),
           mcp_alias: (args) => aliasManager.handleAction(args),
@@ -406,6 +428,7 @@ class ServiceBootstrap {
             project: 'mcp_project',
             env: 'mcp_env',
             vault: 'mcp_vault',
+            context: 'mcp_context',
             capability: 'mcp_capability',
             evidence: 'mcp_evidence',
             runbook: 'mcp_runbook',
@@ -429,6 +452,7 @@ class ServiceBootstrap {
         'projectManager',
         'envManager',
         'vaultManager',
+        'contextManager',
         'capabilityManager',
         'evidenceManager',
         'aliasManager',
@@ -448,8 +472,8 @@ class ServiceBootstrap {
 
     // Intent Manager
     this.container.register('intentManager',
-      (logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver) =>
-        new IntentManager(logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver), {
+      (logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver, contextService) =>
+        new IntentManager(logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver, contextService), {
       singleton: true,
       dependencies: [
         'logger',
@@ -459,6 +483,7 @@ class ServiceBootstrap {
         'runbookManager',
         'evidenceService',
         'projectResolver',
+        'contextService',
       ],
     });
 

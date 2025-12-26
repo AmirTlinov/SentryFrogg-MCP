@@ -5,6 +5,8 @@
  */
 
 const EFFECT_KINDS = new Set(['read', 'write', 'mixed']);
+const path = require('path');
+const { pathExists } = require('../utils/fsAtomic.cjs');
 
 function ensureStringArray(value, label) {
   if (value === undefined || value === null) {
@@ -58,12 +60,107 @@ function normalizeEffects(effects) {
   return { kind, requires_apply: Boolean(requiresApply) };
 }
 
+function normalizeWhen(when) {
+  if (when === undefined || when === null) {
+    return undefined;
+  }
+  if (typeof when !== 'object' || Array.isArray(when)) {
+    throw new Error('Capability when must be an object');
+  }
+  return when;
+}
+
+async function fileExists(root, candidate, cache) {
+  if (!root || !candidate) {
+    return false;
+  }
+  if (cache && Object.prototype.hasOwnProperty.call(cache, candidate)) {
+    return cache[candidate];
+  }
+  const full = path.isAbsolute(candidate) ? candidate : path.join(root, candidate);
+  const exists = await pathExists(full).catch(() => false);
+  if (cache) {
+    cache[candidate] = exists;
+  }
+  return exists;
+}
+
+async function matchesWhen(when, context) {
+  if (!when) {
+    return true;
+  }
+  const tags = new Set(context?.tags || []);
+  const filesCache = { ...(context?.files || {}) };
+  const root = context?.root;
+
+  const matchList = (list, predicate) => Array.isArray(list) ? predicate(list) : true;
+  const all = async (list) => {
+    for (const entry of list) {
+      if (!await matchesWhen(entry, context)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const any = async (list) => {
+    for (const entry of list) {
+      if (await matchesWhen(entry, context)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (Array.isArray(when.all_of) && !(await all(when.all_of))) {
+    return false;
+  }
+  if (Array.isArray(when.any_of) && !(await any(when.any_of))) {
+    return false;
+  }
+  if (when.not && await matchesWhen(when.not, context)) {
+    return false;
+  }
+
+  const tagsAny = matchList(when.tags_any, (list) => list.some((tag) => tags.has(tag)));
+  if (!tagsAny) {
+    return false;
+  }
+  const tagsAll = matchList(when.tags_all, (list) => list.every((tag) => tags.has(tag)));
+  if (!tagsAll) {
+    return false;
+  }
+
+  if (Array.isArray(when.files_any) && when.files_any.length > 0) {
+    let hit = false;
+    for (const entry of when.files_any) {
+      if (await fileExists(root, entry, filesCache)) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
+      return false;
+    }
+  }
+
+  if (Array.isArray(when.files_all) && when.files_all.length > 0) {
+    for (const entry of when.files_all) {
+      if (!await fileExists(root, entry, filesCache)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 class CapabilityManager {
-  constructor(logger, security, validation, capabilityService) {
+  constructor(logger, security, validation, capabilityService, contextService) {
     this.logger = logger.child('capability');
     this.security = security;
     this.validation = validation;
     this.capabilityService = capabilityService;
+    this.contextService = contextService;
   }
 
   async handleAction(args = {}) {
@@ -79,6 +176,8 @@ class CapabilityManager {
         return this.delete(args);
       case 'resolve':
         return this.resolve(args);
+      case 'suggest':
+        return this.suggest(args);
       case 'graph':
         return this.graph();
       case 'stats':
@@ -122,6 +221,7 @@ class CapabilityManager {
       effects: normalizeEffects(config.effects),
       depends_on: ensureStringArray(config.depends_on, 'Capability depends_on'),
       tags: ensureStringArray(config.tags, 'Capability tags'),
+      when: normalizeWhen(config.when),
     };
 
     const capability = await this.capabilityService.setCapability(name, normalized);
@@ -141,6 +241,39 @@ class CapabilityManager {
       intent: capability.intent,
     }));
     return { success: true, graph: edges };
+  }
+
+  async suggest(args) {
+    if (!this.contextService) {
+      throw new Error('Context service is not available');
+    }
+    const contextResult = await this.contextService.getContext(args);
+    const context = contextResult.context || {};
+    const capabilities = await this.capabilityService.listCapabilities();
+
+    const suggestions = [];
+    for (const capability of capabilities) {
+      if (await matchesWhen(capability.when, context)) {
+        suggestions.push({
+          name: capability.name,
+          intent: capability.intent,
+          description: capability.description,
+          effects: capability.effects,
+          tags: capability.tags || [],
+          when: capability.when,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      context: {
+        key: context.key,
+        root: context.root,
+        tags: context.tags,
+      },
+      suggestions,
+    };
   }
 }
 

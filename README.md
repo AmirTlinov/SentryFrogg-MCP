@@ -80,6 +80,7 @@ Export Postgres to SFTP:
 - `mcp_state`
 - `mcp_runbook`
 - `mcp_project`
+- `mcp_context`
 - `mcp_capability`
 - `mcp_intent`
 - `mcp_evidence`
@@ -95,6 +96,7 @@ Reference + examples: `docs/tools.md`.
 
 ## Intent UX
 - Define capabilities in `capabilities.json` (override path via `MCP_CAPABILITIES_PATH`).
+- Context snapshots are stored in `context.json` (override path via `MCP_CONTEXT_PATH`).
 - `mcp_intent` compiles to a runbook plan, dry-run by default; write/mixed effects require `apply: true`.
 - Evidence bundles are stored under `.sentryfrogg/evidence` (override path via `MCP_EVIDENCE_DIR`).
 

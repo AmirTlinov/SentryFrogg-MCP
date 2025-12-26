@@ -94,7 +94,8 @@ class IntentManager {
     capabilityService,
     runbookManager,
     evidenceService,
-    projectResolver
+    projectResolver,
+    contextService
   ) {
     this.logger = logger.child('intent');
     this.security = security;
@@ -103,6 +104,7 @@ class IntentManager {
     this.runbookManager = runbookManager;
     this.evidenceService = evidenceService;
     this.projectResolver = projectResolver;
+    this.contextService = contextService;
   }
 
   async handleAction(args = {}) {
@@ -248,6 +250,25 @@ class IntentManager {
     }
     if (target && inputs.target_name === undefined) {
       inputs.target_name = target;
+    }
+
+    if (this.contextService && inputs.context === undefined) {
+      const contextArgs = {
+        project,
+        target,
+        cwd: args.cwd ?? intent.cwd,
+        repo_root: args.repo_root ?? intent.repo_root,
+        key: args.context_key,
+        refresh: args.context_refresh === true,
+      };
+      const contextResult = await this.contextService.getContext(contextArgs).catch((error) => {
+        this.logger.warn('Context resolution failed', { error: error.message });
+        return null;
+      });
+      if (contextResult?.context) {
+        inputs.context = contextResult.context;
+        context = contextResult.context;
+      }
     }
 
     return {

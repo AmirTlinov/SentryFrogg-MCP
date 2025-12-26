@@ -77,6 +77,7 @@ profiles.json
 projects.json
 state.json
 runbooks.json
+context.json
 aliases.json
 presets.json
 audit.jsonl

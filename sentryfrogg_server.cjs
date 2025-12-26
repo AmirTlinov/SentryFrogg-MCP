@@ -115,6 +115,32 @@ const toolCatalog = [
     },
   },
   {
+    name: 'mcp_context',
+    description: 'Project context cache: detect runtime signals and summarize project state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'refresh', 'summary', 'list', 'stats'] },
+        key: { type: 'string' },
+        project: { type: 'string' },
+        target: { type: 'string' },
+        cwd: { type: 'string' },
+        repo_root: { type: 'string' },
+        refresh: { type: 'boolean' },
+        output: outputSchema,
+        store_as: { type: ['string', 'object'] },
+        store_scope: { type: 'string', enum: ['session', 'persistent'] },
+        trace_id: { type: 'string' },
+        span_id: { type: 'string' },
+        parent_span_id: { type: 'string' },
+        preset: { type: 'string' },
+        preset_name: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: true,
+    },
+  },
+  {
     name: 'mcp_env',
     description: 'Encrypted env bundles + safe remote apply via SSH/SFTP.',
     inputSchema: {
@@ -226,10 +252,14 @@ const toolCatalog = [
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['list', 'get', 'set', 'delete', 'resolve', 'graph', 'stats'] },
+        action: { type: 'string', enum: ['list', 'get', 'set', 'delete', 'resolve', 'suggest', 'graph', 'stats'] },
         name: { type: 'string' },
         intent: { type: 'string' },
         capability: { type: 'object' },
+        project: { type: 'string' },
+        target: { type: 'string' },
+        cwd: { type: 'string' },
+        repo_root: { type: 'string' },
         output: outputSchema,
         store_as: { type: ['string', 'object'] },
         store_scope: { type: 'string', enum: ['session', 'persistent'] },
@@ -254,6 +284,10 @@ const toolCatalog = [
         apply: { type: 'boolean' },
         project: { type: 'string' },
         target: { type: 'string' },
+        cwd: { type: 'string' },
+        repo_root: { type: 'string' },
+        context_key: { type: 'string' },
+        context_refresh: { type: 'boolean' },
         stop_on_error: { type: 'boolean' },
         template_missing: { type: 'string', enum: ['error', 'empty', 'null', 'undefined'] },
         save_evidence: { type: 'boolean' },
@@ -614,6 +648,7 @@ toolCatalog.push(
   { name: 'api', description: 'Alias for mcp_api_client.', inputSchema: toolByName.mcp_api_client.inputSchema },
   { name: 'state', description: 'Alias for mcp_state.', inputSchema: toolByName.mcp_state.inputSchema },
   { name: 'project', description: 'Alias for mcp_project.', inputSchema: toolByName.mcp_project.inputSchema },
+  { name: 'context', description: 'Alias for mcp_context.', inputSchema: toolByName.mcp_context.inputSchema },
   { name: 'env', description: 'Alias for mcp_env.', inputSchema: toolByName.mcp_env.inputSchema },
   { name: 'vault', description: 'Alias for mcp_vault.', inputSchema: toolByName.mcp_vault.inputSchema },
   { name: 'runbook', description: 'Alias for mcp_runbook.', inputSchema: toolByName.mcp_runbook.inputSchema },
@@ -743,6 +778,7 @@ class SentryFroggServer {
       api: 'mcp_api_client',
       state: 'mcp_state',
       project: 'mcp_project',
+      context: 'mcp_context',
       env: 'mcp_env',
       vault: 'mcp_vault',
       runbook: 'mcp_runbook',
@@ -834,6 +870,17 @@ class SentryFroggServer {
             };
           case 'project_use':
             return { action: 'project_use', name: 'myapp', scope: 'persistent' };
+          default:
+            return { action: actionName };
+        }
+      }
+
+      if (toolName === 'mcp_context') {
+        switch (actionName) {
+          case 'summary':
+            return { action: 'summary', project: 'myapp', target: 'prod' };
+          case 'refresh':
+            return { action: 'refresh', cwd: '/srv/myapp' };
           default:
             return { action: actionName };
         }
@@ -932,6 +979,10 @@ class SentryFroggServer {
         description: 'Projects: привязка SSH/env профилей к проектам и выбор активного проекта.',
         usage: 'project_upsert/project_list → project_use → (ssh/env без явного profile_name)',
       },
+      mcp_context: {
+        description: 'Context: обнаружение сигналов проекта и сводка контекста.',
+        usage: 'summary/get → refresh → list/stats',
+      },
       mcp_env: {
         description: 'Env: зашифрованные env-бандлы и безопасная запись/запуск на серверах по SSH.',
         usage: 'profile_upsert/profile_list → write_remote/run_remote',
@@ -1023,8 +1074,8 @@ class SentryFroggServer {
 
     return {
       overview: isUnsafeLocalEnabled()
-        ? 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, runbook, capability/intent/evidence, alias, preset, audit, pipeline и (unsafe) local инструменты.'
-        : 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, runbook, capability/intent/evidence, alias, preset, audit и pipeline инструменты.',
+        ? 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, context, runbook, capability/intent/evidence, alias, preset, audit, pipeline и (unsafe) local инструменты.'
+        : 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, context, runbook, capability/intent/evidence, alias, preset, audit и pipeline инструменты.',
       usage: "help({ tool: 'mcp_ssh_manager' }) или help({ tool: 'mcp_ssh_manager', action: 'exec' })",
       tools: Object.entries(summaries).map(([key, value]) => ({
         name: key,

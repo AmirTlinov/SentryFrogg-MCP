@@ -13,6 +13,7 @@
           "sops_age_key_file": "target.sops_age_key_file"
         }
       },
+      "when": { "tags_any": ["k8s"] },
       "effects": { "kind": "read", "requires_apply": false }
     },
     "k8s.diff": {
@@ -27,6 +28,7 @@
           "sops_age_key_file": "target.sops_age_key_file"
         }
       },
+      "when": { "tags_any": ["k8s"] },
       "effects": { "kind": "read", "requires_apply": false }
     },
     "k8s.apply": {
@@ -41,6 +43,7 @@
           "sops_age_key_file": "target.sops_age_key_file"
         }
       },
+      "when": { "tags_any": ["k8s"] },
       "effects": { "kind": "write", "requires_apply": true }
     },
     "ssh.health": {

@@ -159,6 +159,81 @@ Notes:
 - If a project has multiple targets, `target` is required unless `default_target` is set.
 - Many tools accept `project`/`target` directly, and will also pick up the active project automatically.
 
+## `mcp_context`
+
+Project context cache: detects runtime signals (stack hints) without reading secret contents.
+
+Key actions:
+- `get` / `refresh` / `summary` / `list` / `stats`
+
+Example (summary):
+
+```json
+{ "action": "summary", "project": "myapp", "target": "prod" }
+```
+
+Notes:
+- Context is stored in `context.json` under the profiles directory (`MCP_CONTEXT_PATH` overrides).
+- Context only contains safe metadata (paths + detected tags), not secrets.
+
+## `mcp_capability`
+
+Capability registry ties intents to runbooks (with optional `when` filters).
+
+Key actions:
+- `list` / `get` / `resolve` / `set` / `delete`
+- `suggest` (filter by context)
+- `graph` / `stats`
+
+Suggest example:
+
+```json
+{ "action": "suggest", "project": "myapp", "target": "prod" }
+```
+
+Capability example:
+
+```json
+{
+  "action": "set",
+  "name": "k8s.diff",
+  "capability": {
+    "intent": "k8s.diff",
+    "runbook": "k8s.diff",
+    "effects": { "kind": "read" },
+    "inputs": { "required": ["overlay"] },
+    "when": { "tags_any": ["k8s"] }
+  }
+}
+```
+
+## `mcp_intent`
+
+Intent compiler/executor: `intent` → plan → runbook execution (dry-run by default).
+
+Key actions:
+- `compile` / `explain` / `dry_run` / `execute`
+
+Dry-run example:
+
+```json
+{
+  "action": "dry_run",
+  "intent": { "type": "k8s.diff", "inputs": { "overlay": "/repo/overlays/prod" } }
+}
+```
+
+Notes:
+- `execute` for write/mixed effects requires `apply: true`.
+- When available, `context` is injected into inputs for template mapping.
+
+## `mcp_evidence`
+
+Evidence bundle registry from intent executions.
+
+Key actions:
+- `list` / `get`
+
 ## `mcp_env`
 
 Encrypted environment bundles stored as `env` profiles. Useful for safely shipping secrets into remote `.env` files
