@@ -90,6 +90,217 @@
       }
     ]
   },
+  "k8s.rollout.inspect": {
+    "description": "Inspect rollout/deployment and related pods by selector.",
+    "tags": ["k8s", "diagnostic", "read"],
+    "inputs": ["kubeconfig", "namespace", "selector", "workload_kind", "workload_name", "logs", "tail_lines"],
+    "steps": [
+      {
+        "id": "rollouts",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "rollouts"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "deployments",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "deploy"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "pods",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "pods", "-l", "{{ input.selector }}", "-o", "wide"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "describe_workload",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "describe", "{{ input.workload_kind }}", "{{ input.workload_name }}"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "pod_name",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "pods", "-l", "{{ input.selector }}", "-o", "jsonpath={.items[0].metadata.name}"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "describe_pod",
+        "tool": "mcp_local",
+        "when": {
+          "and": [
+            { "path": "steps.pod_name.stdout", "exists": true },
+            { "path": "steps.pod_name.stdout", "not_equals": "" }
+          ]
+        },
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "describe", "pod", "{{ steps.pod_name.stdout }}"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "logs",
+        "tool": "mcp_local",
+        "when": {
+          "and": [
+            { "path": "input.logs", "equals": true },
+            { "path": "steps.pod_name.stdout", "exists": true },
+            { "path": "steps.pod_name.stdout", "not_equals": "" }
+          ]
+        },
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "logs", "{{ steps.pod_name.stdout }}", "--tail", "{{ input.tail_lines }}"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "k8s.images.list": {
+    "description": "List container images used by workloads in a namespace.",
+    "tags": ["k8s", "read"],
+    "inputs": ["kubeconfig", "namespace"],
+    "steps": [
+      {
+        "id": "images",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "sh",
+          "args": [
+            "-c",
+            "kubectl -n {{ input.namespace }} get deploy,sts,ds,job,cronjob -o jsonpath='{..image}' | tr ' ' '\\n' | sort -u"
+          ],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "gitops.argocd.refresh": {
+    "description": "Refresh ArgoCD application and show status.",
+    "tags": ["gitops", "argocd", "write"],
+    "inputs": ["kubeconfig", "namespace", "app_name", "refresh"],
+    "steps": [
+      {
+        "id": "status_before",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "application", "{{ input.app_name }}", "-o", "wide"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "refresh",
+        "tool": "mcp_local",
+        "when": { "path": "input.refresh", "equals": true },
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": [
+            "-n",
+            "{{ input.namespace }}",
+            "patch",
+            "application",
+            "{{ input.app_name }}",
+            "--type",
+            "merge",
+            "-p",
+            "{\"metadata\":{\"annotations\":{\"argocd.argoproj.io/refresh\":\"hard\"}}}"
+          ],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "status_after",
+        "tool": "mcp_local",
+        "when": { "path": "input.refresh", "equals": true },
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["-n", "{{ input.namespace }}", "get", "application", "{{ input.app_name }}", "-o", "wide"],
+          "env": {
+            "KUBECONFIG": "{{ ?input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "registry.tags.list": {
+    "description": "List repository tags via registry API.",
+    "tags": ["registry", "api", "read"],
+    "inputs": ["project_name", "target_name", "base_url", "repo"],
+    "steps": [
+      {
+        "id": "tags",
+        "tool": "mcp_api_client",
+        "args": {
+          "action": "request",
+          "method": "GET",
+          "project": "{{ ?input.project_name }}",
+          "target": "{{ ?input.target_name }}",
+          "base_url": "{{ ?input.base_url }}",
+          "path": "/v2/{{ input.repo }}/tags/list"
+        }
+      }
+    ]
+  },
   "repo.snapshot": {
     "description": "Fast repository context: root, branch, status, recent commits, diffstat.",
     "tags": ["repo", "git", "read"],

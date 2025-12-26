@@ -49,6 +49,65 @@
       "when": { "tags_any": ["k8s"] },
       "effects": { "kind": "write", "requires_apply": true }
     },
+    "k8s.rollout.inspect": {
+      "intent": "k8s.rollout.inspect",
+      "description": "Inspect rollout/deployment and related pods by selector.",
+      "runbook": "k8s.rollout.inspect",
+      "tags": ["k8s", "diagnostic", "read"],
+      "inputs": {
+        "required": ["namespace", "selector", "workload_kind", "workload_name"],
+        "defaults": { "namespace": "default", "logs": false, "tail_lines": 200 },
+        "map": {
+          "kubeconfig": "target.kubeconfig"
+        }
+      },
+      "when": { "tags_any": ["k8s"] },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "k8s.images.list": {
+      "intent": "k8s.images.list",
+      "description": "List container images used by workloads in a namespace.",
+      "runbook": "k8s.images.list",
+      "tags": ["k8s", "read"],
+      "inputs": {
+        "required": ["namespace"],
+        "defaults": { "namespace": "default" },
+        "map": {
+          "kubeconfig": "target.kubeconfig"
+        }
+      },
+      "when": { "tags_any": ["k8s"] },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "gitops.argocd.refresh": {
+      "intent": "gitops.argocd.refresh",
+      "description": "Refresh ArgoCD application and show status.",
+      "runbook": "gitops.argocd.refresh",
+      "tags": ["gitops", "argocd", "write"],
+      "inputs": {
+        "required": ["app_name"],
+        "defaults": { "namespace": "argocd", "refresh": true },
+        "map": {
+          "kubeconfig": "target.kubeconfig"
+        }
+      },
+      "when": { "tags_any": ["k8s"] },
+      "effects": { "kind": "write", "requires_apply": true }
+    },
+    "registry.tags.list": {
+      "intent": "registry.tags.list",
+      "description": "List repository tags via registry API.",
+      "runbook": "registry.tags.list",
+      "tags": ["registry", "api", "read"],
+      "inputs": {
+        "required": ["repo"],
+        "defaults": {},
+        "map": {
+          "base_url": "target.registry_url"
+        }
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
     "ssh.health": {
       "intent": "ssh.health",
       "description": "Quick SSH reachability check.",
