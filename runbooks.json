@@ -98,6 +98,7 @@
       {
         "id": "rollouts",
         "tool": "mcp_local",
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -111,6 +112,7 @@
       {
         "id": "deployments",
         "tool": "mcp_local",
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -124,6 +126,7 @@
       {
         "id": "pods",
         "tool": "mcp_local",
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -137,6 +140,7 @@
       {
         "id": "describe_workload",
         "tool": "mcp_local",
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -150,6 +154,7 @@
       {
         "id": "pod_name",
         "tool": "mcp_local",
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -169,6 +174,7 @@
             { "path": "steps.pod_name.stdout", "not_equals": "" }
           ]
         },
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -189,6 +195,7 @@
             { "path": "steps.pod_name.stdout", "not_equals": "" }
           ]
         },
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -246,6 +253,7 @@
         "id": "refresh",
         "tool": "mcp_local",
         "when": { "path": "input.refresh", "equals": true },
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",
@@ -270,6 +278,7 @@
         "id": "status_after",
         "tool": "mcp_local",
         "when": { "path": "input.refresh", "equals": true },
+        "continue_on_error": true,
         "args": {
           "action": "exec",
           "command": "kubectl",

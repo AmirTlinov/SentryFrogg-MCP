@@ -34,6 +34,31 @@ async function findGitRoot(startDir) {
   return undefined;
 }
 
+function buildInputTemplate(required = [], defaults = {}) {
+  const template = {};
+  const safeDefaults = defaults && typeof defaults === 'object' ? defaults : {};
+  for (const key of required) {
+    if (Object.prototype.hasOwnProperty.call(safeDefaults, key)) {
+      template[key] = safeDefaults[key];
+    } else {
+      template[key] = `<${key}>`;
+    }
+  }
+  for (const [key, value] of Object.entries(safeDefaults)) {
+    if (template[key] === undefined) {
+      template[key] = value;
+    }
+  }
+  return template;
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry) => typeof entry === 'string' && entry.trim().length > 0);
+}
+
 class WorkspaceService {
   constructor(logger, contextService, projectResolver, profileService, runbookService, capabilityService, projectService, aliasService, presetService, stateService) {
     this.logger = logger.child('workspace');
@@ -149,6 +174,7 @@ class WorkspaceService {
           description: capability.description,
           tags: capability.tags || [],
           effects: capability.effects,
+          inputs: capability.inputs,
           source: capability.source || 'local',
         });
       }
@@ -206,29 +232,60 @@ class WorkspaceService {
       capabilities: await this.suggestCapabilities(context, args.limit),
       runbooks: await this.suggestRunbooks(context, args.limit, args.include_untagged === true),
     };
+    const actions = this.buildActionHints(suggestions, {
+      includeCall: args.include_call !== false,
+    });
+    const view = {
+      format: args.format || 'full',
+      limit: args.limit,
+      include_call: args.include_call !== false,
+    };
+
+    const baseWorkspace = {
+      context: {
+        key: context.key,
+        root: context.root,
+        tags: context.tags,
+        project_name: context.project_name,
+        target_name: context.target_name,
+        updated_at: context.updated_at,
+      },
+      project: projectContext && !projectContext.error ? {
+        name: projectContext.projectName,
+        target: projectContext.targetName,
+        description: projectContext.project?.description,
+        repo_root: projectContext.project?.repo_root,
+        target_info: projectContext.target || {},
+      } : undefined,
+      project_error: projectContext?.error,
+      suggestions,
+      actions,
+      view,
+    };
+
+    if (view.format === 'actions') {
+      return {
+        success: true,
+        context: baseWorkspace.context,
+        project: baseWorkspace.project,
+        actions,
+        view,
+      };
+    }
+
+    if (view.format === 'compact') {
+      return {
+        success: true,
+        workspace: baseWorkspace,
+      };
+    }
 
     return {
       success: true,
       workspace: {
-        context: {
-          key: context.key,
-          root: context.root,
-          tags: context.tags,
-          project_name: context.project_name,
-          target_name: context.target_name,
-          updated_at: context.updated_at,
-        },
-        project: projectContext && !projectContext.error ? {
-          name: projectContext.projectName,
-          target: projectContext.targetName,
-          description: projectContext.project?.description,
-          repo_root: projectContext.project?.repo_root,
-          target_info: projectContext.target || {},
-        } : undefined,
-        project_error: projectContext?.error,
+        ...baseWorkspace,
         store,
         inventory,
-        suggestions,
       },
     };
   }
@@ -240,6 +297,27 @@ class WorkspaceService {
       capabilities: await this.suggestCapabilities(context, args.limit),
       runbooks: await this.suggestRunbooks(context, args.limit, args.include_untagged === true),
     };
+    const actions = this.buildActionHints(suggestions, {
+      includeCall: args.include_call !== false,
+    });
+    const view = {
+      format: args.format || 'suggest',
+      limit: args.limit,
+      include_call: args.include_call !== false,
+    };
+
+    if (view.format === 'actions') {
+      return {
+        success: true,
+        context: {
+          key: context.key,
+          root: context.root,
+          tags: context.tags,
+        },
+        actions,
+        view,
+      };
+    }
     return {
       success: true,
       context: {
@@ -248,6 +326,8 @@ class WorkspaceService {
         tags: context.tags,
       },
       suggestions,
+      actions,
+      view,
     };
   }
 
@@ -337,6 +417,64 @@ class WorkspaceService {
     const store = await this.getStoreStatus();
     const inventory = await this.getInventory();
     return { success: true, store, inventory };
+  }
+
+  buildActionHints(suggestions, { includeCall = true } = {}) {
+    const intentActions = suggestions.capabilities.map((capability) => {
+      const inputsMeta = capability.inputs || {};
+      const required = normalizeStringArray(inputsMeta.required);
+      const defaults = inputsMeta.defaults && typeof inputsMeta.defaults === 'object' ? inputsMeta.defaults : {};
+      const map = inputsMeta.map && typeof inputsMeta.map === 'object' ? inputsMeta.map : {};
+      const template = buildInputTemplate(required, defaults);
+      return {
+        kind: 'intent',
+        name: capability.name,
+        intent: capability.intent,
+        description: capability.description,
+        tags: capability.tags || [],
+        effects: capability.effects,
+        inputs: {
+          required,
+          defaults,
+          map,
+        },
+        call: includeCall ? {
+          tool: 'mcp_workspace',
+          args: {
+            action: 'run',
+            intent_type: capability.intent,
+            inputs: template,
+            apply: capability.effects?.requires_apply ? true : undefined,
+          },
+        } : undefined,
+      };
+    });
+
+    const runbookActions = suggestions.runbooks.map((runbook) => {
+      const required = normalizeStringArray(runbook.inputs);
+      const template = buildInputTemplate(required, {});
+      return {
+        kind: 'runbook',
+        name: runbook.name,
+        description: runbook.description,
+        tags: runbook.tags || [],
+        inputs: { required },
+        reason: runbook.reason,
+        call: includeCall ? {
+          tool: 'mcp_workspace',
+          args: {
+            action: 'run',
+            name: runbook.name,
+            input: template,
+          },
+        } : undefined,
+      };
+    });
+
+    return {
+      intents: intentActions,
+      runbooks: runbookActions,
+    };
   }
 
   async migrateLegacy(args = {}) {

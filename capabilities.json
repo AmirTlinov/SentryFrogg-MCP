@@ -108,6 +108,32 @@
       },
       "effects": { "kind": "read", "requires_apply": false }
     },
+    "repo.snapshot": {
+      "intent": "repo.snapshot",
+      "description": "Fast repository context: root, branch, status, recent commits, diffstat.",
+      "runbook": "repo.snapshot",
+      "tags": ["repo", "git", "read"],
+      "inputs": {
+        "required": [],
+        "defaults": {},
+        "map": {
+          "repo_path": "project.repo_root"
+        }
+      },
+      "when": { "tags_any": ["git"] },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "ssh.system_info": {
+      "intent": "ssh.system_info",
+      "description": "Remote system snapshot via SSH.",
+      "runbook": "ssh.system_info",
+      "tags": ["ssh", "read"],
+      "inputs": {
+        "required": [],
+        "defaults": {}
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
     "ssh.health": {
       "intent": "ssh.health",
       "description": "Quick SSH reachability check.",

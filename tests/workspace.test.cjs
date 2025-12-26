@@ -138,4 +138,9 @@ test('WorkspaceService summary returns suggestions', async (t) => {
   assert.equal(result.success, true);
   assert.ok(result.workspace.suggestions.capabilities.some((item) => item.name === 'k8s.diff'));
   assert.ok(result.workspace.suggestions.runbooks.some((item) => item.name === 'k8s.diff'));
+  assert.ok(result.workspace.actions.intents.some((item) => item.intent === 'k8s.diff'));
+
+  const actionsOnly = await workspace.summarize({ format: 'actions' });
+  assert.equal(actionsOnly.success, true);
+  assert.ok(actionsOnly.actions.intents.some((item) => item.intent === 'k8s.diff'));
 });

@@ -99,6 +99,7 @@ class CapabilityService {
       description: capability.description,
       runbook: capability.runbook,
       effects: capability.effects,
+      inputs: capability.inputs,
       depends_on: capability.depends_on || [],
       tags: capability.tags || [],
       when: capability.when,

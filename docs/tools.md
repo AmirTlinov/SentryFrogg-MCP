@@ -192,6 +192,12 @@ Summary example:
 { "action": "summary", "project": "myapp", "target": "prod" }
 ```
 
+Actions-only summary (UX hints + call templates):
+
+```json
+{ "action": "summary", "project": "myapp", "target": "prod", "format": "actions" }
+```
+
 Diagnostics example:
 
 ```json
@@ -225,6 +231,7 @@ Legacy migration (dry-run by default):
 Notes:
 - Suggestions are derived from context tags and available runbooks/capabilities.
 - `migrate_legacy` accepts `apply`, `cleanup`, `include_dirs`, `overwrite` flags.
+- `summary`/`suggest` accept `format` (`full` | `compact` | `actions`) and `include_call` (default true).
 
 ## `mcp_capability`
 
