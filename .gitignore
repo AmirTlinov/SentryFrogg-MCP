@@ -82,6 +82,9 @@ presets.json
 audit.jsonl
 cache/
 
+# Evidence bundles
+.sentryfrogg/
+
 # parcel-bundler cache
 .cache/
 .parcel-cache/

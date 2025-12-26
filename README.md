@@ -16,6 +16,7 @@ If you want your agent to move real data (API ↔ SFTP ↔ Postgres), run contro
 - Streaming pipelines between HTTP, SFTP, and Postgres for large payloads.
 - Reliability primitives: retry/backoff, pagination, timeouts.
 - Runbooks + state for multi-step workflows and repeatable ops.
+- Intent layer with capability registry, previewed plans, and evidence bundles.
 - Observability with trace/span metadata and audit logs (redacted).
 - Encrypted local profile store (AES-256-GCM).
 - Safe-by-default local writes (no overwrite unless `overwrite: true`).
@@ -78,6 +79,10 @@ Export Postgres to SFTP:
 - `mcp_api_client`
 - `mcp_state`
 - `mcp_runbook`
+- `mcp_project`
+- `mcp_capability`
+- `mcp_intent`
+- `mcp_evidence`
 - `mcp_alias`
 - `mcp_preset`
 - `mcp_audit`
@@ -87,6 +92,11 @@ Export Postgres to SFTP:
 Short aliases are also available (`sql`, `psql`, `ssh`, `http`, `api`, `state`, `runbook`, `pipeline`; plus `local` when unsafe mode is enabled).
 
 Reference + examples: `docs/tools.md`.
+
+## Intent UX
+- Define capabilities in `capabilities.json` (override path via `MCP_CAPABILITIES_PATH`).
+- `mcp_intent` compiles to a runbook plan, dry-run by default; write/mixed effects require `apply: true`.
+- Evidence bundles are stored under `.sentryfrogg/evidence` (override path via `MCP_EVIDENCE_DIR`).
 
 ## Development
 - `npm run check`

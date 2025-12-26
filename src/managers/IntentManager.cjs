@@ -1,0 +1,332 @@
+#!/usr/bin/env node
+
+/**
+ * 🎯 Intent Manager (intent → plan → runbook)
+ */
+
+const SECRET_FIELD_PATTERN = /(key|token|secret|pass|pwd)/i;
+
+function getByPath(source, path) {
+  if (!path) {
+    return undefined;
+  }
+  const parts = String(path).split('.').filter(Boolean);
+  let current = source;
+  for (const part of parts) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+    if (!Object.prototype.hasOwnProperty.call(current, part)) {
+      return undefined;
+    }
+    current = current[part];
+  }
+  return current;
+}
+
+function redactObject(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactObject(entry));
+  }
+  if (value && typeof value === 'object') {
+    const result = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (SECRET_FIELD_PATTERN.test(key)) {
+        result[key] = '***';
+      } else {
+        result[key] = redactObject(entry);
+      }
+    }
+    return result;
+  }
+  return value;
+}
+
+function normalizeInputs(intentInputs, capability) {
+  const inputs = intentInputs || {};
+  const defaults = capability.inputs?.defaults || {};
+  const map = capability.inputs?.map || {};
+  const passThrough = capability.inputs?.pass_through !== false;
+  const resolved = { ...defaults };
+
+  for (const [target, source] of Object.entries(map)) {
+    const value = getByPath(inputs, source);
+    if (value !== undefined) {
+      resolved[target] = value;
+    }
+  }
+
+  if (passThrough) {
+    for (const [key, value] of Object.entries(inputs)) {
+      if (value !== undefined) {
+        resolved[key] = value;
+      }
+    }
+  }
+
+  const required = capability.inputs?.required || [];
+  const missing = required.filter((key) => resolved[key] === undefined || resolved[key] === null || resolved[key] === '');
+  return { resolved, missing };
+}
+
+function aggregateEffects(steps) {
+  let requiresApply = false;
+  let kind = 'read';
+  for (const step of steps) {
+    const effect = step.effects || {};
+    if (effect.requires_apply || effect.kind === 'write' || effect.kind === 'mixed') {
+      requiresApply = true;
+    }
+    if (effect.kind === 'mixed') {
+      kind = 'mixed';
+    } else if (effect.kind === 'write' && kind !== 'mixed') {
+      kind = 'write';
+    }
+  }
+  return { kind, requires_apply: requiresApply };
+}
+
+class IntentManager {
+  constructor(
+    logger,
+    security,
+    validation,
+    capabilityService,
+    runbookManager,
+    evidenceService,
+    projectResolver
+  ) {
+    this.logger = logger.child('intent');
+    this.security = security;
+    this.validation = validation;
+    this.capabilityService = capabilityService;
+    this.runbookManager = runbookManager;
+    this.evidenceService = evidenceService;
+    this.projectResolver = projectResolver;
+  }
+
+  async handleAction(args = {}) {
+    const { action } = args;
+    switch (action) {
+      case 'compile':
+        return this.compile(args);
+      case 'dry_run':
+        return this.execute(args, { dryRun: true });
+      case 'execute':
+        return this.execute(args, { dryRun: false });
+      case 'explain':
+        return this.explain(args);
+      default:
+        throw new Error(`Unknown intent action: ${action}`);
+    }
+  }
+
+  async compile(args) {
+    const { plan, missing } = await this.buildPlan(args, { allowMissing: true });
+    return { success: true, plan, missing };
+  }
+
+  async explain(args) {
+    const intent = await this.normalizeIntent(args);
+    const capability = await this.resolveCapability(intent.type);
+    const { resolved, missing } = normalizeInputs(intent.inputs, capability);
+    return {
+      success: true,
+      intent: { type: intent.type, inputs: redactObject(intent.inputs) },
+      capability,
+      inputs: resolved,
+      missing,
+    };
+  }
+
+  async execute(args, { dryRun }) {
+    const { plan, missing } = await this.buildPlan(args, { allowMissing: false });
+    if (missing.length > 0) {
+      throw new Error(`Missing required inputs: ${missing.join(', ')}`);
+    }
+
+    if (dryRun) {
+      return {
+        success: true,
+        dry_run: true,
+        plan,
+        preview: plan.steps.map((step) => ({
+          capability: step.capability,
+          runbook: step.runbook,
+          inputs: redactObject(step.inputs),
+        })),
+        missing,
+      };
+    }
+
+    const apply = Boolean(args.apply || plan.intent.apply);
+    if (plan.effects.requires_apply && !apply) {
+      throw new Error('Intent requires apply=true for write/mixed effects');
+    }
+
+    const stopOnError = args.stop_on_error !== false;
+    const results = [];
+    let success = true;
+
+    for (const step of plan.steps) {
+      const result = await this.runbookManager.handleAction({
+        action: 'runbook_run',
+        name: step.runbook,
+        input: step.inputs,
+        stop_on_error: stopOnError,
+        template_missing: args.template_missing,
+        trace_id: args.trace_id,
+        span_id: args.span_id,
+        parent_span_id: args.parent_span_id,
+      });
+      results.push({
+        capability: step.capability,
+        runbook: step.runbook,
+        result,
+      });
+      if (!result.success && stopOnError) {
+        success = false;
+        break;
+      }
+      if (!result.success) {
+        success = false;
+      }
+    }
+
+    const evidence = {
+      intent: redactObject(plan.intent),
+      effects: plan.effects,
+      dry_run: false,
+      executed_at: new Date().toISOString(),
+      steps: results,
+      success,
+    };
+
+    let evidencePath;
+    if (args.save_evidence) {
+      const saved = await this.evidenceService.saveEvidence(evidence);
+      evidencePath = saved.path;
+    }
+
+    return {
+      success,
+      dry_run: false,
+      plan,
+      results,
+      evidence,
+      evidence_path: evidencePath,
+    };
+  }
+
+  async normalizeIntent(args) {
+    const intent = this.validation.ensureObject(args.intent, 'Intent');
+    const type = this.validation.ensureString(intent.type, 'Intent type');
+    const inputs = { ...(this.validation.ensureOptionalObject(intent.inputs, 'Intent inputs') || {}) };
+    const apply = Boolean(args.apply ?? intent.apply);
+    let project = this.validation.ensureOptionalString(args.project ?? intent.project, 'Project');
+    let target = this.validation.ensureOptionalString(args.target ?? intent.target, 'Target');
+    let context = null;
+
+    if ((!project || !target) && this.projectResolver) {
+      context = await this.projectResolver.resolveContext({ ...args, project, target }).catch(() => null);
+      if (!project && context?.projectName) {
+        project = context.projectName;
+      }
+      if (!target && context?.targetName) {
+        target = context.targetName;
+      }
+      if (context?.project && inputs.project === undefined) {
+        inputs.project = context.project;
+      }
+      if (context?.target && inputs.target === undefined) {
+        inputs.target = context.target;
+      }
+    }
+
+    if (project && inputs.project_name === undefined) {
+      inputs.project_name = project;
+    }
+    if (target && inputs.target_name === undefined) {
+      inputs.target_name = target;
+    }
+
+    return {
+      type,
+      inputs,
+      apply,
+      project,
+      target,
+      context,
+    };
+  }
+
+  async resolveCapability(intentType) {
+    const capability = await this.capabilityService.findByIntent(intentType);
+    if (!capability) {
+      throw new Error(`Capability for intent '${intentType}' not found`);
+    }
+    return capability;
+  }
+
+  async buildPlan(args, { allowMissing }) {
+    const intent = await this.normalizeIntent(args);
+    const root = await this.resolveCapability(intent.type);
+    const ordered = await this.resolveDependencies(root.name);
+    const steps = [];
+    const missing = [];
+
+    for (const capability of ordered) {
+      const { resolved, missing: missingInputs } = normalizeInputs(intent.inputs, capability);
+      steps.push({
+        capability: capability.name,
+        runbook: capability.runbook,
+        inputs: resolved,
+        effects: capability.effects,
+      });
+      if (missingInputs.length > 0) {
+        missing.push(...missingInputs.map((key) => `${capability.name}.${key}`));
+      }
+    }
+
+    if (!allowMissing && missing.length > 0) {
+      throw new Error(`Missing required inputs: ${missing.join(', ')}`);
+    }
+
+    const plan = {
+      intent,
+      steps,
+      effects: aggregateEffects(steps),
+    };
+    this.security.ensureSizeFits(JSON.stringify(plan));
+    return { plan, missing };
+  }
+
+  async resolveDependencies(rootName) {
+    const ordered = [];
+    const visiting = new Set();
+    const visited = new Set();
+
+    const visit = async (name) => {
+      if (visited.has(name)) {
+        return;
+      }
+      if (visiting.has(name)) {
+        throw new Error(`Capability dependency cycle at '${name}'`);
+      }
+      visiting.add(name);
+      const capability = await this.capabilityService.getCapability(name);
+      const deps = Array.isArray(capability.depends_on) ? capability.depends_on : [];
+      for (const dep of deps) {
+        await visit(dep);
+      }
+      visiting.delete(name);
+      visited.add(name);
+      ordered.push(capability);
+    };
+
+    await visit(rootName);
+    return ordered;
+  }
+}
+
+module.exports = IntentManager;

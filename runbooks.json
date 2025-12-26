@@ -1,0 +1,117 @@
+{
+  "k8s.render": {
+    "description": "Render kustomize overlay via kubectl kustomize.",
+    "steps": [
+      {
+        "id": "render",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["kustomize", "{{ input.overlay }}"],
+          "env": {
+            "KUBECONFIG": "{{ input.kubeconfig }}",
+            "SOPS_AGE_KEY_FILE": "{{ ?input.sops_age_key_file }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "k8s.diff": {
+    "description": "Render and diff against cluster.",
+    "steps": [
+      {
+        "id": "render",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["kustomize", "{{ input.overlay }}"],
+          "env": {
+            "KUBECONFIG": "{{ input.kubeconfig }}",
+            "SOPS_AGE_KEY_FILE": "{{ ?input.sops_age_key_file }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "diff",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["diff", "-f", "-"],
+          "stdin": "{{ steps.render.stdout }}",
+          "env": {
+            "KUBECONFIG": "{{ input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "k8s.apply": {
+    "description": "Render and apply to cluster.",
+    "steps": [
+      {
+        "id": "render",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["kustomize", "{{ input.overlay }}"],
+          "env": {
+            "KUBECONFIG": "{{ input.kubeconfig }}",
+            "SOPS_AGE_KEY_FILE": "{{ ?input.sops_age_key_file }}"
+          },
+          "inline": true
+        }
+      },
+      {
+        "id": "apply",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "kubectl",
+          "args": ["apply", "-f", "-"],
+          "stdin": "{{ steps.render.stdout }}",
+          "env": {
+            "KUBECONFIG": "{{ input.kubeconfig }}"
+          },
+          "inline": true
+        }
+      }
+    ]
+  },
+  "ssh.health": {
+    "description": "Quick SSH reachability check.",
+    "steps": [
+      {
+        "id": "check",
+        "tool": "mcp_ssh_manager",
+        "args": {
+          "action": "check_host",
+          "project": "{{ input.project_name }}",
+          "target": "{{ input.target_name }}"
+        }
+      }
+    ]
+  },
+  "api.check": {
+    "description": "API health check.",
+    "steps": [
+      {
+        "id": "check",
+        "tool": "mcp_api_client",
+        "args": {
+          "action": "check",
+          "project": "{{ input.project_name }}",
+          "target": "{{ input.target_name }}",
+          "base_url": "{{ ?input.base_url }}",
+          "path": "{{ input.path }}"
+        }
+      }
+    ]
+  }
+}

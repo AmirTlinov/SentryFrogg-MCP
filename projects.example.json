@@ -1,0 +1,21 @@
+{
+  "demo": {
+    "description": "Demo project for SentryFrogg.",
+    "default_target": "prod",
+    "targets": {
+      "prod": {
+        "description": "Production cluster",
+        "ssh_profile": "demo-prod-ssh",
+        "env_profile": "demo-prod-env",
+        "postgres_profile": "demo-prod-db",
+        "api_profile": "demo-prod-api",
+        "vault_profile": "demo-prod-vault",
+        "cwd": "/srv/demo",
+        "env_path": "/srv/demo/.env",
+        "kubeconfig": "/home/user/.kube/demo-prod",
+        "sops_age_key_file": "/home/user/.agekey",
+        "api_base_url": "https://api.example.com"
+      }
+    }
+  }
+}

@@ -221,6 +221,78 @@ const toolCatalog = [
     },
   },
   {
+    name: 'mcp_capability',
+    description: 'Capability registry for intent→runbook mappings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'get', 'set', 'delete', 'resolve', 'graph', 'stats'] },
+        name: { type: 'string' },
+        intent: { type: 'string' },
+        capability: { type: 'object' },
+        output: outputSchema,
+        store_as: { type: ['string', 'object'] },
+        store_scope: { type: 'string', enum: ['session', 'persistent'] },
+        trace_id: { type: 'string' },
+        span_id: { type: 'string' },
+        parent_span_id: { type: 'string' },
+        preset: { type: 'string' },
+        preset_name: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: true,
+    },
+  },
+  {
+    name: 'mcp_intent',
+    description: 'Intent compiler/executor (intent → plan → runbook).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['compile', 'dry_run', 'execute', 'explain'] },
+        intent: { type: 'object' },
+        apply: { type: 'boolean' },
+        project: { type: 'string' },
+        target: { type: 'string' },
+        stop_on_error: { type: 'boolean' },
+        template_missing: { type: 'string', enum: ['error', 'empty', 'null', 'undefined'] },
+        save_evidence: { type: 'boolean' },
+        output: outputSchema,
+        store_as: { type: ['string', 'object'] },
+        store_scope: { type: 'string', enum: ['session', 'persistent'] },
+        trace_id: { type: 'string' },
+        span_id: { type: 'string' },
+        parent_span_id: { type: 'string' },
+        preset: { type: 'string' },
+        preset_name: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: true,
+    },
+  },
+  {
+    name: 'mcp_evidence',
+    description: 'Evidence bundles produced by intent executions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'get'] },
+        id: { type: 'string' },
+        limit: { type: 'integer' },
+        output: outputSchema,
+        store_as: { type: ['string', 'object'] },
+        store_scope: { type: 'string', enum: ['session', 'persistent'] },
+        trace_id: { type: 'string' },
+        span_id: { type: 'string' },
+        parent_span_id: { type: 'string' },
+        preset: { type: 'string' },
+        preset_name: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: true,
+    },
+  },
+  {
     name: 'mcp_alias',
     description: 'Alias registry for short names and reusable tool shortcuts.',
     inputSchema: {
@@ -545,6 +617,9 @@ toolCatalog.push(
   { name: 'env', description: 'Alias for mcp_env.', inputSchema: toolByName.mcp_env.inputSchema },
   { name: 'vault', description: 'Alias for mcp_vault.', inputSchema: toolByName.mcp_vault.inputSchema },
   { name: 'runbook', description: 'Alias for mcp_runbook.', inputSchema: toolByName.mcp_runbook.inputSchema },
+  { name: 'capability', description: 'Alias for mcp_capability.', inputSchema: toolByName.mcp_capability.inputSchema },
+  { name: 'intent', description: 'Alias for mcp_intent.', inputSchema: toolByName.mcp_intent.inputSchema },
+  { name: 'evidence', description: 'Alias for mcp_evidence.', inputSchema: toolByName.mcp_evidence.inputSchema },
   { name: 'alias', description: 'Alias for mcp_alias.', inputSchema: toolByName.mcp_alias.inputSchema },
   { name: 'preset', description: 'Alias for mcp_preset.', inputSchema: toolByName.mcp_preset.inputSchema },
   { name: 'audit', description: 'Alias for mcp_audit.', inputSchema: toolByName.mcp_audit.inputSchema },
@@ -671,6 +746,9 @@ class SentryFroggServer {
       env: 'mcp_env',
       vault: 'mcp_vault',
       runbook: 'mcp_runbook',
+      capability: 'mcp_capability',
+      intent: 'mcp_intent',
+      evidence: 'mcp_evidence',
       alias: 'mcp_alias',
       preset: 'mcp_preset',
       audit: 'mcp_audit',
@@ -815,6 +893,17 @@ class SentryFroggServer {
         }
       }
 
+      if (toolName === 'mcp_intent') {
+        switch (actionName) {
+          case 'compile':
+            return { action: 'compile', intent: { type: 'k8s.diff', inputs: { overlay: '/repo/overlay' } } };
+          case 'execute':
+            return { action: 'execute', apply: true, intent: { type: 'k8s.apply', inputs: { overlay: '/repo/overlay' } } };
+          default:
+            return { action: actionName };
+        }
+      }
+
       return { action: actionName };
     };
 
@@ -854,6 +943,18 @@ class SentryFroggServer {
       mcp_runbook: {
         description: 'Runbooks: хранение и выполнение многошаговых сценариев, плюс DSL.',
         usage: 'runbook_upsert/runbook_upsert_dsl/runbook_list → runbook_run/runbook_run_dsl',
+      },
+      mcp_capability: {
+        description: 'Capabilities: реестр intent→runbook, граф зависимостей и статистика.',
+        usage: 'list/get/resolve → set/delete → graph/stats',
+      },
+      mcp_intent: {
+        description: 'Intent: компиляция и выполнение capability-планов с dry-run и evidence.',
+        usage: 'compile/explain → dry_run → execute (apply=true для write/mixed)',
+      },
+      mcp_evidence: {
+        description: 'Evidence: просмотр сохранённых evidence-бандлов.',
+        usage: 'list/get',
       },
       mcp_alias: {
         description: 'Aliases: короткие имена для инструментов и аргументов.',
@@ -922,8 +1023,8 @@ class SentryFroggServer {
 
     return {
       overview: isUnsafeLocalEnabled()
-        ? 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, runbook, alias, preset, audit, pipeline и (unsafe) local инструменты. Можно использовать профиль или inline-подключение в каждом вызове.'
-        : 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, runbook, alias, preset, audit и pipeline инструменты. Можно использовать профиль или inline-подключение в каждом вызове.',
+        ? 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, runbook, capability/intent/evidence, alias, preset, audit, pipeline и (unsafe) local инструменты.'
+        : 'SentryFrogg MCP подключает PostgreSQL, SSH, HTTP, state, project, runbook, capability/intent/evidence, alias, preset, audit и pipeline инструменты.',
       usage: "help({ tool: 'mcp_ssh_manager' }) или help({ tool: 'mcp_ssh_manager', action: 'exec' })",
       tools: Object.entries(summaries).map(([key, value]) => ({
         name: key,

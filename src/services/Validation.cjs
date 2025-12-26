@@ -24,6 +24,13 @@ class Validation {
     return trim ? normalized : value;
   }
 
+  ensureOptionalString(value, label, options) {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    return this.ensureString(value, label, options);
+  }
+
   ensurePort(port, fallback) {
     if (port === undefined || port === null || port === '') {
       return fallback;
@@ -85,6 +92,20 @@ class Validation {
           return [[key.trim(), String(value).trim()]];
         })
     );
+  }
+
+  ensureObject(value, label) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`${label} must be an object`);
+    }
+    return value;
+  }
+
+  ensureOptionalObject(value, label) {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    return this.ensureObject(value, label);
   }
 }
 

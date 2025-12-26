@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "capabilities": {
+    "k8s.render": {
+      "intent": "k8s.render",
+      "description": "Render kustomize overlay via kubectl kustomize.",
+      "runbook": "k8s.render",
+      "inputs": {
+        "required": ["overlay", "kubeconfig"],
+        "defaults": {},
+        "map": {
+          "kubeconfig": "target.kubeconfig",
+          "sops_age_key_file": "target.sops_age_key_file"
+        }
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "k8s.diff": {
+      "intent": "k8s.diff",
+      "description": "Render and diff against cluster.",
+      "runbook": "k8s.diff",
+      "inputs": {
+        "required": ["overlay", "kubeconfig"],
+        "defaults": {},
+        "map": {
+          "kubeconfig": "target.kubeconfig",
+          "sops_age_key_file": "target.sops_age_key_file"
+        }
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "k8s.apply": {
+      "intent": "k8s.apply",
+      "description": "Render and apply to cluster.",
+      "runbook": "k8s.apply",
+      "inputs": {
+        "required": ["overlay", "kubeconfig"],
+        "defaults": {},
+        "map": {
+          "kubeconfig": "target.kubeconfig",
+          "sops_age_key_file": "target.sops_age_key_file"
+        }
+      },
+      "effects": { "kind": "write", "requires_apply": true }
+    },
+    "ssh.health": {
+      "intent": "ssh.health",
+      "description": "Quick SSH reachability check.",
+      "runbook": "ssh.health",
+      "inputs": {
+        "required": [],
+        "defaults": {}
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    },
+    "api.check": {
+      "intent": "api.check",
+      "description": "API health check.",
+      "runbook": "api.check",
+      "inputs": {
+        "required": ["path"],
+        "defaults": { "path": "/health" },
+        "map": {
+          "base_url": "target.api_base_url"
+        }
+      },
+      "effects": { "kind": "read", "requires_apply": false }
+    }
+  }
+}

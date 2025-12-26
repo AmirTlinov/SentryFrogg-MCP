@@ -60,7 +60,10 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "profiles.example.json"
+    "profiles.example.json",
+    "projects.example.json",
+    "runbooks.json",
+    "capabilities.json"
   ],
   "os": [
     "darwin",

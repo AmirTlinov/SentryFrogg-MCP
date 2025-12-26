@@ -95,6 +95,10 @@ class ServiceBootstrap {
         const runbookService = this.container.get('runbookService');
         await runbookService.initialize();
       }
+      if (this.container.has('capabilityService')) {
+        const capabilityService = this.container.get('capabilityService');
+        await capabilityService.initialize();
+      }
       if (this.container.has('aliasService')) {
         const aliasService = this.container.get('aliasService');
         await aliasService.initialize();
@@ -108,6 +112,13 @@ class ServiceBootstrap {
         const toolExecutor = this.container.get('toolExecutor');
         const runbookManager = this.container.get('runbookManager');
         toolExecutor.register('mcp_runbook', (args) => runbookManager.handleAction(args));
+      }
+
+      if (this.container.has('toolExecutor') && this.container.has('intentManager')) {
+        const toolExecutor = this.container.get('toolExecutor');
+        const intentManager = this.container.get('intentManager');
+        toolExecutor.register('mcp_intent', (args) => intentManager.handleAction(args));
+        toolExecutor.aliasMap.intent = 'mcp_intent';
       }
 
       if (this.container.has('toolExecutor') && this.container.has('localManager')) {
@@ -149,6 +160,8 @@ class ServiceBootstrap {
     const ProjectService = require('../services/ProjectService.cjs');
     const ProjectResolver = require('../services/ProjectResolver.cjs');
     const RunbookService = require('../services/RunbookService.cjs');
+    const CapabilityService = require('../services/CapabilityService.cjs');
+    const EvidenceService = require('../services/EvidenceService.cjs');
     const AliasService = require('../services/AliasService.cjs');
     const PresetService = require('../services/PresetService.cjs');
     const AuditService = require('../services/AuditService.cjs');
@@ -221,6 +234,20 @@ class ServiceBootstrap {
       dependencies: ['logger'],
     });
 
+    // Capability сервис
+    this.container.register('capabilityService', (logger, security) =>
+      new CapabilityService(logger, security), {
+      singleton: true,
+      dependencies: ['logger', 'security'],
+    });
+
+    // Evidence сервис
+    this.container.register('evidenceService', (logger, security) =>
+      new EvidenceService(logger, security), {
+      singleton: true,
+      dependencies: ['logger', 'security'],
+    });
+
     // Alias сервис
     this.container.register('aliasService', (logger) =>
       new AliasService(logger), {
@@ -260,6 +287,9 @@ class ServiceBootstrap {
     const EnvManager = require('../managers/EnvManager.cjs');
     const VaultManager = require('../managers/VaultManager.cjs');
     const RunbookManager = require('../managers/RunbookManager.cjs');
+    const CapabilityManager = require('../managers/CapabilityManager.cjs');
+    const IntentManager = require('../managers/IntentManager.cjs');
+    const EvidenceManager = require('../managers/EvidenceManager.cjs');
     const AliasManager = require('../managers/AliasManager.cjs');
     const PresetManager = require('../managers/PresetManager.cjs');
     const AuditManager = require('../managers/AuditManager.cjs');
@@ -332,9 +362,25 @@ class ServiceBootstrap {
       dependencies: ['logger', 'validation', 'profileService', 'vaultClient'],
     });
 
+    // Capability Manager
+    this.container.register('capabilityManager',
+      (logger, security, validation, capabilityService) =>
+        new CapabilityManager(logger, security, validation, capabilityService), {
+      singleton: true,
+      dependencies: ['logger', 'security', 'validation', 'capabilityService'],
+    });
+
+    // Evidence Manager
+    this.container.register('evidenceManager',
+      (logger, security, validation, evidenceService) =>
+        new EvidenceManager(logger, security, validation, evidenceService), {
+      singleton: true,
+      dependencies: ['logger', 'security', 'validation', 'evidenceService'],
+    });
+
     // Tool executor
     this.container.register('toolExecutor',
-      (logger, stateService, aliasService, presetService, auditService, postgresqlManager, sshManager, apiManager, stateManager, projectManager, envManager, vaultManager, aliasManager, presetManager, auditManager, pipelineManager) =>
+      (logger, stateService, aliasService, presetService, auditService, postgresqlManager, sshManager, apiManager, stateManager, projectManager, envManager, vaultManager, capabilityManager, evidenceManager, aliasManager, presetManager, auditManager, pipelineManager) =>
         new ToolExecutor(logger, stateService, aliasService, presetService, auditService, {
           mcp_psql_manager: (args) => postgresqlManager.handleAction(args),
           mcp_ssh_manager: (args) => sshManager.handleAction(args),
@@ -343,6 +389,8 @@ class ServiceBootstrap {
           mcp_project: (args) => projectManager.handleAction(args),
           mcp_env: (args) => envManager.handleAction(args),
           mcp_vault: (args) => vaultManager.handleAction(args),
+          mcp_capability: (args) => capabilityManager.handleAction(args),
+          mcp_evidence: (args) => evidenceManager.handleAction(args),
           mcp_alias: (args) => aliasManager.handleAction(args),
           mcp_preset: (args) => presetManager.handleAction(args),
           mcp_audit: (args) => auditManager.handleAction(args),
@@ -358,6 +406,8 @@ class ServiceBootstrap {
             project: 'mcp_project',
             env: 'mcp_env',
             vault: 'mcp_vault',
+            capability: 'mcp_capability',
+            evidence: 'mcp_evidence',
             runbook: 'mcp_runbook',
             alias: 'mcp_alias',
             preset: 'mcp_preset',
@@ -379,6 +429,8 @@ class ServiceBootstrap {
         'projectManager',
         'envManager',
         'vaultManager',
+        'capabilityManager',
+        'evidenceManager',
         'aliasManager',
         'presetManager',
         'auditManager',
@@ -392,6 +444,22 @@ class ServiceBootstrap {
         new RunbookManager(logger, runbookService, stateService, toolExecutor), {
       singleton: true,
       dependencies: ['logger', 'runbookService', 'stateService', 'toolExecutor'],
+    });
+
+    // Intent Manager
+    this.container.register('intentManager',
+      (logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver) =>
+        new IntentManager(logger, security, validation, capabilityService, runbookManager, evidenceService, projectResolver), {
+      singleton: true,
+      dependencies: [
+        'logger',
+        'security',
+        'validation',
+        'capabilityService',
+        'runbookManager',
+        'evidenceService',
+        'projectResolver',
+      ],
     });
 
     // Alias Manager

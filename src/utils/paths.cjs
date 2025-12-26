@@ -96,6 +96,18 @@ module.exports = {
     }
     return path.join(resolveProfileBaseDir(), 'runbooks.json');
   },
+  resolveCapabilitiesPath() {
+    if (process.env.MCP_CAPABILITIES_PATH) {
+      return path.resolve(process.env.MCP_CAPABILITIES_PATH);
+    }
+    return path.join(resolveProfileBaseDir(), 'capabilities.json');
+  },
+  resolveEvidenceDir() {
+    if (process.env.MCP_EVIDENCE_DIR) {
+      return path.resolve(process.env.MCP_EVIDENCE_DIR);
+    }
+    return path.join(resolveProfileBaseDir(), '.sentryfrogg', 'evidence');
+  },
   resolveAliasesPath() {
     if (process.env.MCP_ALIASES_PATH) {
       return path.resolve(process.env.MCP_ALIASES_PATH);
