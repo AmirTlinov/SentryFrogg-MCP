@@ -90,6 +90,84 @@
       }
     ]
   },
+  "repo.snapshot": {
+    "description": "Fast repository context: root, branch, status, recent commits, diffstat.",
+    "tags": ["repo", "git", "read"],
+    "inputs": ["repo_path"],
+    "steps": [
+      {
+        "id": "root",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "git",
+          "args": ["rev-parse", "--show-toplevel"],
+          "cwd": "{{ ?input.repo_path }}",
+          "inline": true
+        }
+      },
+      {
+        "id": "branch",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "git",
+          "args": ["branch", "--show-current"],
+          "cwd": "{{ steps.root.stdout }}",
+          "inline": true
+        }
+      },
+      {
+        "id": "status",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "git",
+          "args": ["status", "--short"],
+          "cwd": "{{ steps.root.stdout }}",
+          "inline": true
+        }
+      },
+      {
+        "id": "diffstat",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "git",
+          "args": ["diff", "--stat"],
+          "cwd": "{{ steps.root.stdout }}",
+          "inline": true
+        }
+      },
+      {
+        "id": "recent",
+        "tool": "mcp_local",
+        "args": {
+          "action": "exec",
+          "command": "git",
+          "args": ["log", "-5", "--oneline"],
+          "cwd": "{{ steps.root.stdout }}",
+          "inline": true
+        }
+      }
+    ]
+  },
+  "ssh.system_info": {
+    "description": "Remote system snapshot via SSH.",
+    "tags": ["ssh", "read"],
+    "inputs": ["project_name", "target_name"],
+    "steps": [
+      {
+        "id": "info",
+        "tool": "mcp_ssh_manager",
+        "args": {
+          "action": "system_info",
+          "project": "{{ input.project_name }}",
+          "target": "{{ input.target_name }}"
+        }
+      }
+    ]
+  },
   "ssh.health": {
     "description": "Quick SSH reachability check.",
     "tags": ["ssh", "read"],
